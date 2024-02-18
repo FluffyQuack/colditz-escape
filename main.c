@@ -1048,6 +1048,43 @@ static void glut_idle_game(void)
     // Don't hammer down the CPU
     else if (game_time - last_ptime - REPOSITION_INTERVAL > QUANTUM_OF_SOLACE)
         msleep(QUANTUM_OF_SOLACE);
+
+
+    //Fluffy: This piece of code is taken from set_props_overlays(). It used to be called during rendering, but since it affects gameplay, it makes more sense to be here
+    {
+        uint8_t u;
+        uint32_t prop_offset;
+        uint16_t x, y;
+
+        // reset the stand over prop
+        over_prop = 0;
+        over_prop_id = 0;
+        for (u=0; u<nb_room_props; u++)
+        {
+            prop_offset = room_props[u];
+
+            if (prop_offset == 0)
+            // we might have picked the prop since last time
+                continue;
+
+            // Man, this positioning of sprites sure is a bleeping mess,
+            // with weird offsets having to be manually added everywhere!
+            x = readword(fbuffer[OBJECTS],prop_offset+4) - 15;
+            y = readword(fbuffer[OBJECTS],prop_offset+2) - 4;
+
+            // We also take this oppportunity to check if we stand over a prop
+            if ( (prisoner_x >= x-9) && (prisoner_x < x+8) &&
+                 (prisoner_2y/2 >= y-9) && (prisoner_2y/2 < y+8) )
+            {
+                over_prop = u+1;	// 1 indexed
+                over_prop_id = readbyte(fbuffer[OBJECTS],prop_offset+7);
+                // The props message takes precedence
+                set_status_message(fbuffer[LOADER] + readlong(fbuffer[LOADER],
+                    PROPS_MESSAGE_BASE + 4*(over_prop_id-1)), 1, PROPS_MESSAGE_TIMEOUT);
+    //			printb("over_prop = %x, over_prop_id = %x\n", over_prop, over_prop_id);
+            }
+        }
+    }
 }
 
 // Menu navigation

@@ -950,9 +950,13 @@ void set_props_overlays()
     uint32_t prop_offset;
     uint16_t x, y;
 
+    //Fluffy: I moved this code to gameplay loop. This can be deleted once we figure the change is stable
+    /*
     // reset the stand over prop
     over_prop = 0;
     over_prop_id = 0;
+    */
+
     for (u=0; u<nb_room_props; u++)
     {
         prop_offset = room_props[u];
@@ -973,6 +977,8 @@ void set_props_overlays()
         overlay[overlay_index].y = gl_off_y + y + sprite[overlay[overlay_index].sid].y_offset;
         ignore_offscreen_y(overlay_index);
 
+        //Fluffy: I moved this code to gameplay loop. This can be deleted once we figure the change is stable
+        /*
         // We also take this oppportunity to check if we stand over a prop
         if ( (prisoner_x >= x-9) && (prisoner_x < x+8) &&
              (prisoner_2y/2 >= y-9) && (prisoner_2y/2 < y+8) )
@@ -984,6 +990,7 @@ void set_props_overlays()
                 PROPS_MESSAGE_BASE + 4*(over_prop_id-1)), 1, PROPS_MESSAGE_TIMEOUT);
 //			printb("over_prop = %x, over_prop_id = %x\n", over_prop, over_prop_id);
         }
+        */
 
         // all the props should appear behind overlays, expect the ones with no mask
         // (which are always set at MIN_Z)
