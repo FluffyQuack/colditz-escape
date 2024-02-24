@@ -759,6 +759,7 @@ extern uint8_t			current_nation;
 extern char				nb_props_message[32];
 extern uint64_t			game_time, last_atime, last_ptime, last_ctime, t_last;
 extern s_event			events[NB_EVENTS];
+extern bool fourSplitscreen; //Fluffy: Always render 4-player split screen
 
 /*
  *	Prototypes

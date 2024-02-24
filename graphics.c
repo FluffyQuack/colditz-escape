@@ -1481,6 +1481,14 @@ void display_panel()
     display_message(status_message);
 }
 
+//Fluffy
+static void RenderGameFrameBuffer(float x1, float y1, float w, float h, unsigned int texid, bool smooth)
+{
+    if(smooth)
+        display_sprite_linear(x1, y1, w, h, texid);
+    else
+        display_sprite(x1, y1, w, h, texid);
+}
 
 // Here is the long sought after "zooming the ****ing 2D colour buffer" function.
 // What a Â£$%^&*&^ing bore!!! And none of this crap works on PSP anyway unless you
@@ -1500,7 +1508,12 @@ void rescale_buffer()
     GLint shaderSizeLocation;
 #endif
 
-    if ((gl_width != PSP_SCR_WIDTH) && (gl_height != PSP_SCR_HEIGHT))
+    //Fluffy
+    bool renderSplitscreen = 0;
+    if(fourSplitscreen && !(game_state & GAME_STATE_STATIC_PIC))
+        renderSplitscreen = 1;
+
+    if ((gl_width != PSP_SCR_WIDTH) && (gl_height != PSP_SCR_HEIGHT) || renderSplitscreen)
     {
         glDisable(GL_BLEND);	// Better than having to use glClear()
 
@@ -1515,8 +1528,11 @@ void rescale_buffer()
         }
 #endif
 
-        glBindTexture(GL_TEXTURE_2D, render_texid);
-        glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, PSP_SCR_WIDTH, PSP_SCR_HEIGHT, 0);
+        if(!renderSplitscreen) //Fluffy
+        {
+            glBindTexture(GL_TEXTURE_2D, render_texid);
+            glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, PSP_SCR_WIDTH, PSP_SCR_HEIGHT, 0);
+        }
 
         // Then we change our viewport to the actual screen size
         glViewport(0, 0, gl_width, gl_height);
@@ -1527,10 +1543,17 @@ void rescale_buffer()
         glOrtho(0, gl_width, gl_height, 0, -1, 1);
 
         // OK, now we can display the whole texture
-        if (opt_gl_smoothing == 1)
-            display_sprite_linear(0.0f, (float)gl_height, (float)gl_width, (float)-gl_height, render_texid);
-        else
-            display_sprite(0.0f, (float)gl_height, (float)gl_width, (float)-gl_height, render_texid);
+        if(!renderSplitscreen) //Fluffy: Normal render
+            RenderGameFrameBuffer(0.0f, (float)gl_height, (float)gl_width, (float)-gl_height, render_texid, opt_gl_smoothing);
+        else //Fluffy: Render all four screens
+        {
+            float sizeX = (float)gl_width / 2;
+            float sizeY = (float)gl_height / 2;
+            RenderGameFrameBuffer(0.0f, sizeY, sizeX, -sizeY, paused_texid[0], opt_gl_smoothing);
+            RenderGameFrameBuffer(sizeX, sizeY, sizeX, -sizeY, paused_texid[1], opt_gl_smoothing);
+            RenderGameFrameBuffer(0.0f, (float)gl_height, sizeX, -sizeY, paused_texid[2], opt_gl_smoothing);
+            RenderGameFrameBuffer(sizeX, (float)gl_height, sizeX, -sizeY, paused_texid[3], opt_gl_smoothing);
+        }
 
 #if !defined(PSP)
         if (opt_gl_smoothing >= 2)

@@ -110,7 +110,8 @@ bool config_save				= false;
 bool opt_has_shaders			= false;
 // Prevents double consumption of keys while opening a door
 bool can_consume_key			= true;
-
+//Fluffy: Always render 4-player split screen
+bool fourSplitscreen = 1;
 
 // We'll need this to retrieve our glutIdle function after a suspended state
 // (but make sure we don't change idle if already suspended, which can happen on PSP printf)
@@ -360,6 +361,55 @@ static void glut_init()
 
 }
 
+//Fluffy: Create 4 screens (based on create_pause_screen())
+extern GLuint paused_texid[4];
+extern uint8_t  pause_rgb[3];
+__inline void display_sprite(float x1, float y1, float w, float h, unsigned int texid);
+void CreateFourFullScreens()
+{
+#define SPACER 8
+    int i, restore_nation;
+    float restore_fade;
+    float x,y,w,h;
+
+    //Fluffy TODO: We should make the room_props array (and related variables) 4 times as big so they always contain information for each screen, and then we reference those rather than update room_props as we switch rooms
+
+    //Back up props array
+    uint16_t room_props_backup[NB_OBSBIN];
+    for(int i = 0; i < NB_OBSBIN; i++)
+        room_props_backup[i] = room_props[i];
+    uint8_t nb_room_props_backup = nb_room_props;
+
+    restore_fade = fade_value;
+    fade_value = 1.0f;
+    restore_nation = current_nation;
+    w = PSP_SCR_WIDTH;
+    h = PSP_SCR_HEIGHT;
+    x = 0;
+    y = 0;
+    for (i=0; i<NB_NATIONS; i++)
+    {
+        current_nation = i;
+        //t_status_message_timeout = 0;
+        //status_message_priority = 0;
+        set_room_props();
+        glClear(GL_COLOR_BUFFER_BIT);
+        display_room();
+        if (in_tunnel && opt_enhanced_tunnels)
+            display_tunnel_area();
+        display_panel();
+        // Copy the section of interest into one of our four paused textures
+        glBindTexture(GL_TEXTURE_2D, paused_texid[i]);
+        glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h, 0);
+    }
+    current_nation = restore_nation;
+    fade_value = restore_fade;
+
+    //Restore props array
+    for(int i = 0; i < NB_OBSBIN; i++)
+        room_props[i] = room_props_backup[i];
+    nb_room_props = nb_room_props_backup;
+}
 
 // Our display routine.
 static void glut_display(void)
@@ -387,12 +437,18 @@ static void glut_display(void)
         else
             display_picture();
     }
-    else
-    {	// In game => update room content and panel
-        display_room();
-        if (in_tunnel && opt_enhanced_tunnels)
-            display_tunnel_area();
-        display_panel();
+    else // In game => update room content and panel
+    {
+        if(!fourSplitscreen) //Fluffy: Normal singleplayer rendering
+        {
+            display_room();
+            if (in_tunnel && opt_enhanced_tunnels)
+                display_tunnel_area();
+            display_panel();
+        }
+        else //Fluffy: Render every screen at the same time
+            CreateFourFullScreens();
+
         // Should we display the game menu?
         if ((game_menu) && (picture_state != GAME_FADE_IN) )
             display_menu_screen();
