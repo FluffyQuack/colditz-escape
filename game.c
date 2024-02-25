@@ -374,6 +374,14 @@ void newgame_init()
 {
     uint16_t  i,j;
 
+    //Fluffy
+    for(int i = 0; i < NB_NATIONS; i++)
+    {
+        roomProps[i].nb_room_props = 0;
+        roomProps[i].over_prop = 0;
+        roomProps[i].over_prop_id = 0;
+    }
+
     // Reset all cheats
     if (opt_thrillerdance)
     {
@@ -484,7 +492,8 @@ void newgame_init()
 
     // Reset the room props & animations
     init_animations = true;
-    set_room_props();
+    for(int i = 0; i < NB_NATIONS; i++)
+        set_room_props(i);
 
     // Reinit the time markers;
     // NB: to have the clock go at full throttle, set ctime to 0 and game_time to a high value
@@ -583,7 +592,8 @@ bool load_game(char* load_name)
 
     // Reset the room props & animations
     init_animations = true;
-    set_room_props();
+    for(int i = 0; i < NB_NATIONS; i++)
+        set_room_props(i);
 
     // Update time
     t_last = mtime();
@@ -927,39 +937,33 @@ void cmp_set_overlays()
 
 // Read the props (pickable objects) from obs.bin
 // For efficiency reasons, this is only done when switching room
-void set_room_props()
+void set_room_props(int nationIdx)
 {
     uint16_t prop_offset;
 
-    nb_room_props = 0;
+    roomProps[nationIdx].nb_room_props = 0;
     for (prop_offset=2; prop_offset<(8*nb_objects+2); prop_offset+=8)
     {
-        if (readword(fbuffer[OBJECTS],prop_offset) != current_room_index)
+        if (readword(fbuffer[OBJECTS],prop_offset) != guybrush[nationIdx].room)
             continue;
 
-        room_props[nb_room_props] = prop_offset;
-        nb_room_props++;
+        roomProps[nationIdx].room_props[roomProps[nationIdx].nb_room_props] = prop_offset;
+        roomProps[nationIdx].nb_room_props++;
     }
 }
 
 
 // Set the props overlays
-void set_props_overlays()
+void set_props_overlays(int nationIdx)
 {
     uint8_t u;
     uint32_t prop_offset;
     uint16_t x, y;
 
-    //Fluffy: I moved this code to gameplay loop. This can be deleted once we figure the change is stable
-    /*
-    // reset the stand over prop
-    over_prop = 0;
-    over_prop_id = 0;
-    */
 
-    for (u=0; u<nb_room_props; u++)
+    for (u=0; u<roomProps[nationIdx].nb_room_props; u++)
     {
-        prop_offset = room_props[u];
+        prop_offset = roomProps[nationIdx].room_props[u];
 
         if (prop_offset == 0)
         // we might have picked the prop since last time
@@ -977,27 +981,13 @@ void set_props_overlays()
         overlay[overlay_index].y = gl_off_y + y + sprite[overlay[overlay_index].sid].y_offset;
         ignore_offscreen_y(overlay_index);
 
-        //Fluffy: I moved this code to gameplay loop. This can be deleted once we figure the change is stable
-        /*
-        // We also take this oppportunity to check if we stand over a prop
-        if ( (prisoner_x >= x-9) && (prisoner_x < x+8) &&
-             (prisoner_2y/2 >= y-9) && (prisoner_2y/2 < y+8) )
-        {
-            over_prop = u+1;	// 1 indexed
-            over_prop_id = readbyte(fbuffer[OBJECTS],prop_offset+7);
-            // The props message takes precedence
-            set_status_message(fbuffer[LOADER] + readlong(fbuffer[LOADER],
-                PROPS_MESSAGE_BASE + 4*(over_prop_id-1)), 1, PROPS_MESSAGE_TIMEOUT);
-//			printb("over_prop = %x, over_prop_id = %x\n", over_prop, over_prop_id);
-        }
-        */
 
         // all the props should appear behind overlays, expect the ones with no mask
         // (which are always set at MIN_Z)
         overlay[overlay_index].z = MIN_Z+1;
 
         // Because of the removable walls we have a special case for the CMP_MAP
-        if (!(is_outside && (remove_props[x/32][y/16])))
+        if (!(guybrush[nationIdx].room == ROOM_OUTSIDE && (remove_props[x/32][y/16])))
             // Don't add overlay if covered by a wall
             safe_overlay_index_increment();
     }
@@ -2547,7 +2537,7 @@ void switch_nation(uint8_t new_nation)
     prisoner_reset_ani = true;
     t_status_message_timeout = 0;
     status_message_priority = 0;
-    set_room_props();
+    set_room_props(current_nation);
 }
 
 // Called when changing rooms
@@ -2685,7 +2675,7 @@ void switch_room(int16_t exit_nr, bool tunnel_io)
     prisoner_2y = tile_y*32 + 2*pixel_y - 2;
 
     // Don't forget to (re)set the room props
-    set_room_props();
+    set_room_props(current_nation);
 }
 
 
@@ -2728,7 +2718,7 @@ void go_to_jail(uint32_t p)
         reinstantiate_guards_in_pursuit(p);
 
     // Don't forget to (re)set the room props
-    set_room_props();
+    set_room_props(p);
 }
 
 void out_of_jail(uint32_t p)
@@ -2741,7 +2731,7 @@ void out_of_jail(uint32_t p)
     guy(p).room = readword(fbuffer[LOADER],INITIAL_POSITION_BASE+10*p+4);
 
     // Don't forget to (re)set the room props
-    set_room_props();
+    set_room_props(p);
 }
 
 // This next one is necessary so that we don't send the guard away after a pass request

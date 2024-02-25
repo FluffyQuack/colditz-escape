@@ -680,6 +680,13 @@ typedef struct
 	uint64_t		solitary_release;
 } s_prisoner_event;
 
+//Fluffy
+typedef struct
+{
+    uint8_t		nb_room_props;
+    uint16_t	room_props[NB_OBSBIN];
+    uint8_t		over_prop, over_prop_id;
+} s_roomProps;
 
 /*
  *	Defines, passing as globals (originally global variables)
@@ -739,9 +746,7 @@ extern uint8_t			*static_image_buffer;
 extern uint8_t			props[NB_NATIONS][NB_PROPS];
 extern uint8_t			selected_prop[NB_NATIONS];
 extern s_prisoner_event p_event[NB_NATIONS];
-extern uint8_t			nb_room_props;
-extern uint16_t			room_props[NB_OBSBIN];
-extern uint8_t			over_prop, over_prop_id;
+extern s_roomProps roomProps[NB_NATIONS]; //Fluffy
 extern char				*status_message;
 extern int				status_message_priority;
 extern const int16_t	directions[3][3], dir_to_dx[9], dir_to_d2y[9], invert_dir[9];

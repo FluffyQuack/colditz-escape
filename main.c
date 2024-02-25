@@ -222,11 +222,9 @@ char*		status_message;
 int			status_message_priority;
 s_event		events[NB_EVENTS];
 s_prisoner_event p_event[NB_NATIONS];
-uint8_t		nb_room_props = 0;
 uint8_t		props[NB_NATIONS][NB_PROPS];
 uint8_t		selected_prop[NB_NATIONS];
-uint16_t	room_props[NB_OBSBIN];
-uint8_t		over_prop = 0, over_prop_id = 0;
+s_roomProps roomProps[NB_NATIONS]; //Fluffy: Array with room prop information for every player
 char		nb_props_message[32] = "\499 * ";
 uint8_t		current_nation = 0;
 uint16_t	game_state;
@@ -372,13 +370,6 @@ void CreateFourFullScreens()
     float restore_fade;
     float x,y,w,h;
 
-    //Fluffy TODO: We should make the room_props array (and related variables) 4 times as big so they always contain information for each screen, and then we reference those rather than update room_props as we switch rooms
-
-    //Back up props array
-    uint16_t room_props_backup[NB_OBSBIN];
-    for(int i = 0; i < NB_OBSBIN; i++)
-        room_props_backup[i] = room_props[i];
-    uint8_t nb_room_props_backup = nb_room_props;
 
     restore_fade = fade_value;
     fade_value = 1.0f;
@@ -392,23 +383,17 @@ void CreateFourFullScreens()
         current_nation = i;
         //t_status_message_timeout = 0;
         //status_message_priority = 0;
-        set_room_props();
         glClear(GL_COLOR_BUFFER_BIT);
-        display_room();
+        display_room(i);
         if (in_tunnel && opt_enhanced_tunnels)
             display_tunnel_area();
-        display_panel();
+        display_panel(i);
         // Copy the section of interest into one of our four paused textures
         glBindTexture(GL_TEXTURE_2D, paused_texid[i]);
         glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h, 0);
     }
     current_nation = restore_nation;
     fade_value = restore_fade;
-
-    //Restore props array
-    for(int i = 0; i < NB_OBSBIN; i++)
-        room_props[i] = room_props_backup[i];
-    nb_room_props = nb_room_props_backup;
 }
 
 // Our display routine.
@@ -441,10 +426,10 @@ static void glut_display(void)
     {
         if(!fourSplitscreen) //Fluffy: Normal singleplayer rendering
         {
-            display_room();
+            display_room(current_nation);
             if (in_tunnel && opt_enhanced_tunnels)
                 display_tunnel_area();
-            display_panel();
+            display_panel(current_nation);
         }
         else //Fluffy: Render every screen at the same time
             CreateFourFullScreens();
@@ -888,14 +873,14 @@ void user_input()
 
             if (key_down[KEY_INVENTORY_PICKUP])
             {	// picking up
-                if (over_prop)
+                if (roomProps[current_nation].over_prop) //Fluffy TODO: Handle for each nation
                 {
-                    prop_offset = room_props[over_prop-1];
-                    room_props[over_prop-1] = 0;
+                    prop_offset = roomProps[current_nation].room_props[roomProps[current_nation].over_prop-1]; //Fluffy TODO: Handle for each nation
+                    roomProps[current_nation].room_props[roomProps[current_nation].over_prop-1] = 0; //Fluffy TODO: Handle for each nation
                     // change the room index to an invalid one
                     writeword(fbuffer[OBJECTS],prop_offset,ROOM_NO_PROP);
-                    props[current_nation][over_prop_id]++;
-                    selected_prop[current_nation] = over_prop_id;
+                    props[current_nation][roomProps[current_nation].over_prop_id]++; //Fluffy TODO: Handle for each nation
+                    selected_prop[current_nation] = roomProps[current_nation].over_prop_id; //Fluffy TODO: Handle for each nation
                     show_prop_count();
                 }
             }
@@ -904,7 +889,7 @@ void user_input()
                 if (selected_prop[current_nation])
                 {
                     found = false;
-                    over_prop_id = selected_prop[current_nation];
+                    roomProps[current_nation].over_prop_id = selected_prop[current_nation]; //Fluffy TODO: Handle for each nation
                     // OK, now we'll look for an picked object space in obs.bin to store
                     // our data
                     for (prop_offset=2; prop_offset<(8*nb_objects+2); prop_offset+=8)
@@ -912,8 +897,8 @@ void user_input()
                         if (readword(fbuffer[OBJECTS],prop_offset) == ROOM_NO_PROP)
                         {	// There should always be at least one
                             // Add the prop to our current room
-                            room_props[nb_room_props] = prop_offset;
-                            nb_room_props++;
+                            roomProps[current_nation].room_props[roomProps[current_nation].nb_room_props] = prop_offset; //Fluffy TODO: Handle for each nation
+                            roomProps[current_nation].nb_room_props++; //Fluffy TODO: Handle for each nation
                             // Write down the relevant value in obs.bin
                             // 1. Room number
                             writeword(fbuffer[OBJECTS],prop_offset,current_room_index);
@@ -921,7 +906,7 @@ void user_input()
                             writeword(fbuffer[OBJECTS],prop_offset+4, prisoner_x + 16);
                             writeword(fbuffer[OBJECTS],prop_offset+2, prisoner_2y/2 + 4);
                             // 3. object id
-                            writeword(fbuffer[OBJECTS],prop_offset+6, over_prop_id);
+                            writeword(fbuffer[OBJECTS],prop_offset+6, roomProps[current_nation].over_prop_id); //Fluffy TODO: Handle for each nation
                             found = true;
                             break;
                         }
@@ -929,16 +914,21 @@ void user_input()
                     if (!found)		// Somebody's cheating!
                         perr("Could not find any free prop variable => discarding prop.\n");
 
-                    props[current_nation][over_prop_id]--;
-                    if (props[current_nation][over_prop_id] == 0)
+                    props[current_nation][roomProps[current_nation].over_prop_id]--; //Fluffy TODO: Handle for each nation
+                    if (props[current_nation][roomProps[current_nation].over_prop_id] == 0) //Fluffy TODO: Handle for each nation
                     // display the empty box if last prop
                         selected_prop[current_nation] = 0;
                     // don't care to much about reconstructing over_prop, as the next redisplay
                     // will take care of it
-                    over_prop = 0;
-                    over_prop_id = 0;
+                    roomProps[current_nation].over_prop = 0; //Fluffy TODO: Handle for each nation
+                    roomProps[current_nation].over_prop_id = 0; //Fluffy TODO: Handle for each nation
                 }
             }
+
+            //Fluffy: Update room props for every player in case an item was dropped/picked up in the same room as another nation
+            for(int nationIdx = 0; nationIdx < NB_NATIONS; nationIdx++)
+                set_room_props(nationIdx);
+
             return;
         }
 
@@ -1107,17 +1097,18 @@ static void glut_idle_game(void)
 
 
     //Fluffy: This piece of code is taken from set_props_overlays(). It used to be called during rendering, but since it affects gameplay, it makes more sense to be here
+    for(int i = 0; i < NB_NATIONS; i++)
     {
         uint8_t u;
         uint32_t prop_offset;
         uint16_t x, y;
 
         // reset the stand over prop
-        over_prop = 0;
-        over_prop_id = 0;
-        for (u=0; u<nb_room_props; u++)
+        roomProps[i].over_prop = 0;
+        roomProps[i].over_prop_id = 0;
+        for (u=0; u<roomProps[i].nb_room_props; u++)
         {
-            prop_offset = room_props[u];
+            prop_offset = roomProps[i].room_props[u];
 
             if (prop_offset == 0)
             // we might have picked the prop since last time
@@ -1129,14 +1120,14 @@ static void glut_idle_game(void)
             y = readword(fbuffer[OBJECTS],prop_offset+2) - 4;
 
             // We also take this oppportunity to check if we stand over a prop
-            if ( (prisoner_x >= x-9) && (prisoner_x < x+8) &&
-                 (prisoner_2y/2 >= y-9) && (prisoner_2y/2 < y+8) )
+            if ( (guybrush[i].px >= x-9) && (guybrush[i].px < x+8) &&
+                 (guybrush[i].p2y/2 >= y-9) && (guybrush[i].p2y/2 < y+8) )
             {
-                over_prop = u+1;	// 1 indexed
-                over_prop_id = readbyte(fbuffer[OBJECTS],prop_offset+7);
+                roomProps[i].over_prop = u+1;	// 1 indexed
+                roomProps[i].over_prop_id = readbyte(fbuffer[OBJECTS],prop_offset+7);
                 // The props message takes precedence
                 set_status_message(fbuffer[LOADER] + readlong(fbuffer[LOADER],
-                    PROPS_MESSAGE_BASE + 4*(over_prop_id-1)), 1, PROPS_MESSAGE_TIMEOUT);
+                    PROPS_MESSAGE_BASE + 4*(roomProps[i].over_prop_id-1)), 1, PROPS_MESSAGE_TIMEOUT);
     //			printb("over_prop = %x, over_prop_id = %x\n", over_prop, over_prop_id);
             }
         }

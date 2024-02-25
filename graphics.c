@@ -933,7 +933,7 @@ void display_overlays()
 }
 
 // Display room
-void display_room()
+void display_room(int nationIdx)
 {
 // OK, I'll spare you the suspense: this is NOT optimized as hell!
 // We are redrawing ALL the tiles and ALL overlays, for EACH FRAME!
@@ -964,23 +964,23 @@ void display_room()
     }
 
     // Compute GL offsets (position of 0,0 corner of the room wrt center of the screen)
-    gl_off_x = PSP_SCR_WIDTH/2 - prisoner_x;
-    gl_off_y = PSP_SCR_HEIGHT/2 - (prisoner_2y/2) - NORTHWARD_HO;
+    gl_off_x = PSP_SCR_WIDTH/2 - guybrush[nationIdx].px;
+    gl_off_y = PSP_SCR_HEIGHT/2 - (guybrush[nationIdx].p2y/2) - NORTHWARD_HO;
 
     // reset room overlays
     overlay_index = 0;
 
     // Update the room description message (NB: we need to do that before the props
     // overlay call, if we want a props message override
-    if (is_outside)
+    if (guybrush[nationIdx].room == ROOM_OUTSIDE)
     {	// Outside
         set_status_message(fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE +
             4*COURTYARD_MSG_ID), 0, NO_MESSAGE_TIMEOUT);
     }
-    else if (current_room_index < ROOM_TUNNEL)
+    else if (guybrush[nationIdx].room < ROOM_TUNNEL)
     {	// Standard room
         set_status_message(fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE +
-            4*(readbyte(fbuffer[LOADER], ROOM_DESC_BASE	+ current_room_index))), 0, NO_MESSAGE_TIMEOUT);
+            4*(readbyte(fbuffer[LOADER], ROOM_DESC_BASE	+ guybrush[nationIdx].room))), 0, NO_MESSAGE_TIMEOUT);
     }
     else
     {	// Tunnel
@@ -991,13 +991,13 @@ void display_room()
 
     // Before we do anything, let's set the pickable objects in
     // our overlay table (so that room overlays go on top of 'em)
-    set_props_overlays();
+    set_props_overlays(nationIdx);
 
     // This sets the room_x, room_y and offset values
-    set_room_xy(current_room_index);
+    set_room_xy(guybrush[nationIdx].room);
 
     // No readtile() macros used here, for speed
-    if (is_inside)
+    if (guybrush[nationIdx].room != ROOM_OUTSIDE)
     {	// Standard room (inside)
 
         // Read the tiles data
@@ -1020,7 +1020,7 @@ void display_room()
                 tile_data = readword((uint8_t*)fbuffer[ROOMS], offset);
 
                 display_sprite(pixel_x,pixel_y,32,16,
-                    cell_texid[(tile_data>>7) + ((current_room_index>0x202)?0x1E0:0)]);
+                    cell_texid[(tile_data>>7) + ((guybrush[nationIdx].room>0x202)?0x1E0:0)]);
 
                 // Display sprite overlay
                 crm_set_overlays(pixel_x, pixel_y, tile_data & 0xFF80);
@@ -1041,20 +1041,20 @@ void display_room()
 
         // These are the min/max tile boundary computation for PSP screen
         // according to our cropped section
-        min_y = prisoner_2y/32 - 7;
+        min_y = guybrush[nationIdx].p2y/32 - 7;
         if (min_y < 0)
             min_y = 0;
 
         // +12 if you remove the bottom crop
-        max_y = prisoner_2y/32 + 10;
+        max_y = guybrush[nationIdx].p2y/32 + 10;
         if (max_y > room_y)
             max_y = room_y;
 
-        min_x = prisoner_x/32 - 8;
+        min_x = guybrush[nationIdx].px/32 - 8;
         if (min_x < 0)
             min_x = 0;
 
-        max_x = prisoner_x/32 + 9;
+        max_x = guybrush[nationIdx].px/32 + 9;
         if (max_x > room_x)
             max_x = room_x;
 
@@ -1139,8 +1139,8 @@ void display_room()
         init_animations = false;
 
     // We'll need that for next run
-    last_p_x = prisoner_x;
-    last_p_y = prisoner_2y/2;
+    last_p_x = guybrush[nationIdx].px;
+    last_p_y = guybrush[nationIdx].p2y/2;
 }
 
 
@@ -1263,7 +1263,7 @@ void display_tunnel_area()
 
 
 // Display the game panel
-void display_panel()
+void display_panel(int nationIdx)
 {
     float w, h;
     uint16_t i, sid;
@@ -1428,8 +1428,8 @@ void display_panel()
     }
 
     // Display the currently selected nation's flag
-    display_sprite(PANEL_FLAGS_X, PANEL_TOP_Y, sprite[PANEL_FLAGS_BASE_SID+current_nation].w,
-        sprite[PANEL_FLAGS_BASE_SID+current_nation].h, sprite_texid[PANEL_FLAGS_BASE_SID+current_nation]);
+    display_sprite(PANEL_FLAGS_X, PANEL_TOP_Y, sprite[PANEL_FLAGS_BASE_SID+nationIdx].w,
+        sprite[PANEL_FLAGS_BASE_SID+nationIdx].h, sprite_texid[PANEL_FLAGS_BASE_SID+nationIdx]);
 
     // Display the clock
     // (Unlike the original game, I like having the zero displayed on hour tens, always)
@@ -1453,26 +1453,26 @@ void display_panel()
             sprite[sid].w, sprite[sid].h, sprite_texid[sid]);
 
     // Display the currently selected prop
-    sid = selected_prop[current_nation] + PANEL_PROPS_BASE;
+    sid = selected_prop[nationIdx] + PANEL_PROPS_BASE;
     display_sprite(PANEL_PROPS_X, PANEL_TOP_Y,
             sprite[sid].w, sprite[sid].h, sprite_texid[sid]);
 
     // Display the fatigue bar
     display_sprite((float)PANEL_FATIGUE_X, (float)PANEL_FATIGUE_Y,
-        (float)(prisoner_fatigue>>0xB), (float)sprite[PANEL_FATIGUE_SPRITE].h,
+        (float)(p_event[nationIdx].fatigue>>0xB), (float)sprite[PANEL_FATIGUE_SPRITE].h,
         sprite_texid[PANEL_FATIGUE_SPRITE]);
 
     // Display close by prop or motion indicator
-    if (over_prop_id)
-        sid = over_prop_id + PANEL_PROPS_BASE;
+    if (roomProps[nationIdx].over_prop_id)
+        sid = roomProps[nationIdx].over_prop_id + PANEL_PROPS_BASE;
     else
     {
-        if (prisoner_state & STATE_TUNNELING)
+        if (guybrush[nationIdx].state & STATE_TUNNELING)
             sid = STATE_CRAWL_SID;
-        else if (prisoner_state & STATE_STOOGING)
+        else if (guybrush[nationIdx].state & STATE_STOOGING)
             sid = STATE_STOOGE_SID;
         else
-            sid = (prisoner_speed == 1)?STATE_WALK_SID:STATE_RUN_SID;
+            sid = (guybrush[nationIdx].speed == 1)?STATE_WALK_SID:STATE_RUN_SID;
     }
     display_sprite(PANEL_STATE_X, PANEL_TOP_Y,
         sprite[sid].w, sprite[sid].h, sprite_texid[sid]);
@@ -1761,9 +1761,8 @@ void create_pause_screen()
         prisoner_reset_ani = true;
         t_status_message_timeout = 0;
         status_message_priority = 0;
-        set_room_props();
         glClear(GL_COLOR_BUFFER_BIT);
-        display_room();
+        display_room(i);
         // Copy the section of interest into one of our four paused textures
         glBindTexture(GL_TEXTURE_2D, paused_texid[i]);
         glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLint)x, (GLint)y, (GLsizei)w, (GLsizei)h, 0);
