@@ -1015,10 +1015,10 @@ void user_input()
                                 roomProps[i].nb_room_props++;
                                 // Write down the relevant value in obs.bin
                                 // 1. Room number
-                                writeword(fbuffer[OBJECTS],prop_offset,current_room_index);
+                                writeword(fbuffer[OBJECTS],prop_offset, guybrush[i].room);
                                 // 2. x & y pos
-                                writeword(fbuffer[OBJECTS],prop_offset+4, prisoner_x + 16);
-                                writeword(fbuffer[OBJECTS],prop_offset+2, prisoner_2y/2 + 4);
+                                writeword(fbuffer[OBJECTS],prop_offset+4, guybrush[i].px + 16);
+                                writeword(fbuffer[OBJECTS],prop_offset+2, guybrush[i].p2y/2 + 4);
                                 // 3. object id
                                 writeword(fbuffer[OBJECTS],prop_offset+6, roomProps[i].over_prop_id);
                                 found = true;
