@@ -54,7 +54,7 @@ s_guybrush  guybrush[NB_GUYBRUSHES];
 
 
 int	currently_animated[MAX_ANIMATIONS];
-uint32_t    exit_flags_offset;
+uint32_t    exit_flags_offset; //Fluffy TODO: Should this be per player?
 // Pointer to the message ID list of the currently allowed rooms
 uint32_t    authorized_ptr;
 uint32_t    next_timed_event_ptr = TIMED_EVENTS_INIT;
@@ -605,7 +605,7 @@ bool load_game(char* load_name)
 
 
 // Simple event handler
-void enqueue_event(void (*f)(uint32_t), uint32_t p, uint64_t delay)
+void enqueue_event(void (*f)(uint32_t), uint32_t p, uint32_t p2, uint64_t delay)
 {
     uint8_t i;
 
@@ -622,6 +622,7 @@ void enqueue_event(void (*f)(uint32_t), uint32_t p, uint64_t delay)
 
     events[i].function = f;
     events[i].parameter = p;
+    events[i].parameter2 = p2;
     events[i].expiration_time = game_time + delay;
 }
 
@@ -675,7 +676,7 @@ int get_animation_sid(uint8_t ani_index, bool is_guybrush)
         frame = nb_frames - 1;	// 0 indexed
         if (p_ani->end_of_ani_function != NULL)
         {	// execute the end of animation function (toggle exit)
-            p_ani->end_of_ani_function(p_ani->end_of_ani_parameter);
+            p_ani->end_of_ani_function(p_ani->end_of_ani_parameter, p_ani->end_of_ani_parameter2);
             p_ani->end_of_ani_function = NULL;
         }
     }
@@ -1328,7 +1329,7 @@ uint8_t i, sid;
 }
 
 // Called after the shot animation has finished playing
-void prisoner_killed(uint32_t p)
+void prisoner_killed(uint32_t p, uint32_t unused)
 {
     p_event[p].display_shot = true;
     // Prevent the sprite from being animated
@@ -1374,7 +1375,7 @@ void reset_guard_delayed(uint32_t g)
     guard(g).target = NO_TARGET;
 }
 
-void reset_guards_in_pursuit(uint32_t p)
+void reset_guards_in_pursuit(uint32_t p, uint32_t unused)
 {
     int g;
 //	printb("reset_guards_in_pursuit() called\n");
@@ -1384,7 +1385,7 @@ void reset_guards_in_pursuit(uint32_t p)
 }
 
 // This one will clear the in pursuit state for the prisonner if he kept quiet for a while
-void clear_pursuit(uint32_t p)
+void clear_pursuit(uint32_t p, uint32_t unused)
 {
     int j;
 //	printb("in clear_pursuit for prisoner %d\n", p);
@@ -1629,6 +1630,7 @@ bool guard_in_pursuit(int i, int p)
             // Stop the prisoner and set shot animation
             guy(p).state = STATE_SHOT|STATE_ANIMATED;
             guy(p).animation.end_of_ani_parameter = p;
+            guy(p).animation.end_of_ani_parameter2 = 0;
             guy(p).animation.end_of_ani_function = prisoner_killed;
             guy(p).animation.index = guy(p).is_dressed_as_guard?GUARD_SHOT_ANI:SHOT_ANI;
             guy(p).animation.framecount = 0;
@@ -1689,21 +1691,23 @@ bool guard_in_pursuit(int i, int p)
 }
 
 
-// Handle the repositioning of guards
-// Returns true if we need to stop the prisoner's motion
-bool move_guards()
+// Handle the repositioning of guards, and also do player movement if they're not blocked
+void move_guards()
 {
     int  i, p;
     bool continue_parent;
     bool but_i_just_got_out;
     bool do_i_know_you;
-    int	 kill_motion;
     int	 dir_x, dir_y;
 
-    kill_motion = false;
+    //Fluffy
+    int blockedByGuard[NB_NATIONS] = {0, 0, 0, 0};
+    if(opt_no_guards)
+        goto skipGuardMovement;
+
     for (i=0; i<NB_GUARDS; i++)
     {
-        if (opt_thrillerdance && guard(i).is_onscreen)
+        if (opt_thrillerdance && guard(i).is_onscreen) //Fluffy TODO
         {
             dir_x = (prisoner_state & STATE_MOTION)?dir_to_dx[prisoner_dir]:0;
             dir_y = (prisoner_state & STATE_MOTION)?dir_to_d2y[prisoner_dir]:0;
@@ -1729,23 +1733,26 @@ bool move_guards()
 
         // 1. Check if we have a collision between our current prisoner and the guard
         //    and kill our motion as a result...
-        if ((guard(i).room == current_room_index) && guard_collision(i, prisoner_x, prisoner_2y) &&
-            // ...unless we're trying to get out
-            (prisoner_dir != DIRECTION_STOPPED) &&
-            guard_collision(i, prisoner_x+2*dir_to_dx[prisoner_dir], prisoner_2y+2*dir_to_d2y[prisoner_dir]) )
-                kill_motion = true;
+        for(int plrIdx = 0; plrIdx < NB_NATIONS; plrIdx++)
+        {
+            if ((guard(i).room == guybrush[plrIdx].room) && guard_collision(i, guybrush[plrIdx].px, guybrush[plrIdx].p2y) &&
+                // ...unless we're trying to get out
+                (guybrush[plrIdx].direction != DIRECTION_STOPPED) &&
+                guard_collision(i, guybrush[plrIdx].px+2*dir_to_dx[guybrush[plrIdx].direction], guybrush[plrIdx].p2y+2*dir_to_d2y[guybrush[plrIdx].direction]) )
+                    blockedByGuard[plrIdx] = true;
+        }
 
         // 2. Deal with guards that are currently being blocked by a prisoner
-        if ((guard(i).state & STATE_BLOCKED) && guard(i).blocked_by_prisoner)
+        if ((guard(i).state & STATE_BLOCKED) && guard(i).blocked_by_prisoner != -1)
         {
             // Did our blocking counter just reach zero
             if (guard(i).wait == 0)
             {
                 // Is our prisoner blocked but still trying to get out at the end of the guard's pause?
-                if ((kill_motion) && (prisoner_dir != DIRECTION_STOPPED))
+                if ((blockedByGuard[guard(i).blocked_by_prisoner]) && (guybrush[guard(i).blocked_by_prisoner].direction != DIRECTION_STOPPED))
                 {
                     // Prevent blocking (butter guard!)
-                    kill_motion = false;
+                    blockedByGuard[guard(i).blocked_by_prisoner] = false;
                     continue;
                 }
 
@@ -1776,6 +1783,8 @@ bool move_guards()
             // Alrighty, do we have our prisoner in sight then?
             if ( (guard(i).room == guy(p).room) && guard_close_by(i, guy(p).px, guy(p).p2y) )
             {
+                //Fluffy TODO (should we skip this entirely? I'm not sure if the stooge system makes sense in multiplayer at all)
+                /*
                 // Handle stooge
                 if (guy(p).state & STATE_STOOGING)
                 {	// Stooge tripwire => set our stooge as the active guy
@@ -1784,6 +1793,7 @@ bool move_guards()
                         switch_nation(p);
                     return 0;
                 }
+                */
 
                 // For clarity purposes
                 do_i_know_you = opt_enhanced_guards && guy(p).is_dressed_as_guard &&
@@ -1815,7 +1825,7 @@ bool move_guards()
                         guard(i).wait = BLOCKED_GUARD_TIMEOUT;
                         // And indicate that we are stopped (and who's blocking us)
                         guard(i).state |= STATE_BLOCKED;
-                        guard(i).blocked_by_prisoner = true;
+                        guard(i).blocked_by_prisoner = p;
                         // Ah shoot, we need to continue the parent "for" loop
                         continue_parent = true;
                         // Break this loop then
@@ -1832,7 +1842,7 @@ bool move_guards()
                     {
 //						printb("delayed pursuit reset from %d for %d\n", i, p);
                         // Clear the in pursuit flag if our prisoner behaved in the next minute
-                        enqueue_event(clear_pursuit, p, 60000);
+                        enqueue_event(clear_pursuit, p, 0, 60000);
                         reset_guard_delayed(i);
                     }
                     else
@@ -1909,7 +1919,7 @@ bool move_guards()
 //					printb("guard %d blocked\n", i);
                     guard(i).state |= STATE_BLOCKED;
                     // Indicate that we're blocked by a non-prisoner obstacle
-                    guard(i).blocked_by_prisoner = false;
+                    guard(i).blocked_by_prisoner = -1;
                     // Alright, we're not gonna use an A star algorithm to route oursevles around obstacles
                     // if our resume route is blocked. Just reinstantiate when offscreen and be done with it
                     if (guard(i).state & STATE_RESUME_ROUTE)
@@ -1927,7 +1937,21 @@ bool move_guards()
             route_guard(i);
 
     }
-    return kill_motion;
+
+    //Fluffy
+skipGuardMovement:
+    for(int i = 0; i < NB_NATIONS; i++)
+    {
+        if(blockedByGuard[i])
+        {
+            if(plVelocity[i].dx || plVelocity[i].d2y)
+                guybrush[i].direction = directions[plVelocity[i].d2y+1][plVelocity[i].dx+1];
+            plVelocity[i].dx = 0; plVelocity[i].d2y = 0;
+            guybrush[i].state &= ~STATE_MOTION;
+        }
+        else
+            process_motion(i);
+    }
 }
 
 
@@ -2000,7 +2024,7 @@ void timed_events(uint16_t hours, uint16_t minutes_high, uint16_t minutes_low)
 
 // Open a closed door, or close an open door
 // Makes use of exit_flags_offset which is a global variable
-void toggle_exit(uint32_t exit_nr)
+void toggle_exit(uint32_t exit_nr, uint32_t nationIdx)
 {
     uint8_t ROOMS_TUNIO;
     uint16_t exit_index;	// exit index in destination room
@@ -2021,7 +2045,7 @@ void toggle_exit(uint32_t exit_nr)
     // Exit indexes for tunnel IO are offset by 0x100, thus
     ROOMS_TUNIO = (exit_nr>=0x100)?TUNNEL_IO:ROOMS;
 
-    if (is_outside)
+    if ((guybrush[nationIdx].room==ROOM_OUTSIDE))
     {
         // Toggle the exit we are facing
         exit_flags = readbyte(fbuffer[ROOMS_TUNIO], exit_flags_offset);
@@ -2044,7 +2068,7 @@ void toggle_exit(uint32_t exit_nr)
 
         // Get target by reading from the ROOMS_EXIT_BASE data
         exit_index = (exit_nr&0xF)-1;
-        _offset = current_room_index << 4;
+        _offset = guybrush[nationIdx].room << 4;
         // Now the real clever trick here is that the exit index of the room you
         // just left and the exit index of the one you go always match.
         // Thus, we know where we should get positioned on entering the room
@@ -2097,10 +2121,9 @@ void toggle_exit(uint32_t exit_nr)
     }
 }
 
-
 // Helper function for check_footprint() below:
 // populates relevant properties for one of the 4 quadrant's tile
-static __inline void get_tile_props(int16_t _tile_x, int16_t _tile_y, int index_nr)
+static __inline void get_tile_props(int16_t _tile_x, int16_t _tile_y, int index_nr, int nationIdx)
 {
     uint8_t register u;
     uint32_t tile;
@@ -2108,7 +2131,7 @@ static __inline void get_tile_props(int16_t _tile_x, int16_t _tile_y, int index_
     // Set the left mask offset index, converted to a long offset
     // Be mindful that the _tile_x/y used here are not the global variables
     // as me might be doing a lookup right/down
-    tile = readtile(_tile_x, _tile_y) + (in_tunnel?TUNNEL_TILE_ADDON:0);
+    tile = ((guybrush[nationIdx].room==ROOM_OUTSIDE)?comp_readtile(_tile_x,_tile_y):room_readtile(_tile_x,_tile_y)) + ((guybrush[nationIdx].state&STATE_TUNNELING)?TUNNEL_TILE_ADDON:0);
 //	printb("readtile(%d, %d) = %04X\n", _tile_x, _tile_y, tile<<7);
     // Dunno why they reset the tile index for tunnels in the original game
 
@@ -2156,7 +2179,7 @@ static __inline void get_tile_props(int16_t _tile_x, int16_t _tile_y, int index_
 // Checks if the prisoner can go to (px,p2y) and initiates door/tunnel I/O
 // Returns non zero if allowed (-1 if not an exit, or the exit number), 0 if not allowed
 // Be mindful that the dx, d2y used here are not the same as the global values from main!
-int16_t check_footprint(int16_t dx, int16_t d2y)
+int16_t check_footprint(int16_t dx, int16_t d2y, int nationIdx)
 {
     uint32_t tile_mask, exit_mask;
     uint32_t ani_offset;
@@ -2169,17 +2192,17 @@ int16_t check_footprint(int16_t dx, int16_t d2y)
     char debug_message[64];
 
     // Initialize a few values
-    if (in_tunnel)
+    if ((guybrush[nationIdx].state&STATE_TUNNELING))
         footprint = TUNNEL_FOOTPRINT;
     else
         footprint = SPRITE_FOOTPRINT;
     offset = 0;
-    set_room_xy(current_room_index);
+    set_room_xy(guybrush[nationIdx].room);
 //	printb("room_x = %d, room_y = %d\n", room_x, room_y);
 
     // Compute the tile on which we try to stand
-    px = prisoner_x + dx - (in_tunnel?16:0);
-    p2y = prisoner_2y + 2*d2y - 1;
+    px = guybrush[nationIdx].px + dx - ((guybrush[nationIdx].state&STATE_TUNNELING)?16:0);
+    p2y = guybrush[nationIdx].p2y + 2*d2y - 1;
     tile_y = p2y / 32;
     tile_x = px / 32;
     // check if we are trying to overflow our room size
@@ -2193,7 +2216,7 @@ int16_t check_footprint(int16_t dx, int16_t d2y)
     for (i=0; i<2; i++)
     {	// y and y+1
         // Populate the various props arrays
-        get_tile_props(tile_x, tile_y, 2*i);
+        get_tile_props(tile_x, tile_y, 2*i, nationIdx);
 
         // Set the upper right mask offset
         if ((px&0x1F) < 16)
@@ -2209,7 +2232,7 @@ int16_t check_footprint(int16_t dx, int16_t d2y)
 
             if ((tile_x+1) < room_x)
             // only read adjacent if it exists (i.e. < room_x)
-                get_tile_props(tile_x+1, tile_y, 2*i+1);
+                get_tile_props(tile_x+1, tile_y, 2*i+1, nationIdx);
             else
             {
                 exit_offset[2*i+1] = MASK_EMPTY;
@@ -2256,13 +2279,13 @@ int16_t check_footprint(int16_t dx, int16_t d2y)
             if (collision(footprint,exit_mask))
             {
                 // We need to spare the exit offset value
-                exit_flags_offset = get_exit_offset(tile_x+exit_dx[0],tile_y-2);
+                exit_flags_offset = ((guybrush[nationIdx].room==ROOM_OUTSIDE)?comp_get_exit_offset(tile_x+exit_dx[0],tile_y-2):room_get_exit_offset(tile_x+exit_dx[0],tile_y-2));
                 exit_flags = readbyte(fbuffer[ROOMS], exit_flags_offset);
 
                 if (opt_onscreen_debug)
                 {	// Override the message
-                    exit_nr = (uint8_t) readexit(tile_x+exit_dx[0],tile_y-2) & 0x1F;
-                    sprintf(debug_message, "EXIT #%d (GRADE %d)", exit_nr & (is_inside?0x0F:0xFF), ((exit_flags & 0x60) >> 5) - 1);
+                    exit_nr = (uint8_t) ((guybrush[nationIdx].room==ROOM_OUTSIDE)?comp_readexit(tile_x+exit_dx[0],tile_y-2):room_readexit(tile_x+exit_dx[0],tile_y-2))& 0x1F;
+                    sprintf(debug_message, "EXIT #%d (GRADE %d)", exit_nr & ((guybrush[nationIdx].room!=ROOM_OUTSIDE)?0x0F:0xFF), ((exit_flags & 0x60) >> 5) - 1);
                     set_status_message(debug_message, 3, 3000); //NO_MESSAGE_TIMEOUT);
                 }
 
@@ -2273,12 +2296,12 @@ int16_t check_footprint(int16_t dx, int16_t d2y)
                     {
                         if ((opt_keymaster) ||
                             // do we have the right key selected
-                            (selected_prop[current_nation] == ((exit_flags & 0x60) >> 5)))
+                            (selected_prop[nationIdx] == ((exit_flags & 0x60) >> 5)))
                         {
                             // Play the door SFX
                             play_sfx(SFX_DOOR);
                             // enqueue the door opening animation
-                            exit_nr = (uint8_t) readexit(tile_x+exit_dx[0],tile_y-2) & 0x1F;
+                            exit_nr = (uint8_t) ((guybrush[nationIdx].room==ROOM_OUTSIDE)?comp_readexit(tile_x+exit_dx[0],tile_y-2):room_readexit(tile_x+exit_dx[0],tile_y-2))& 0x1F;
                             // The trick is we use currently_animated[] to store our door sids
                             // even if not yet animated, so that we can quickly access the
                             // right animation data, rather than exhaustively compare tiles
@@ -2297,16 +2320,17 @@ int16_t check_footprint(int16_t dx, int16_t d2y)
                                 animations[nb_animations].framecount = 0;
                                 animations[nb_animations].end_of_ani_function = &toggle_exit;
                                 animations[nb_animations].end_of_ani_parameter = exit_nr;
+                                animations[nb_animations].end_of_ani_parameter2 = nationIdx;
                                 can_consume_key = false;	// Don't consume any more keys till door opened
                                 safe_nb_animations_increment();
                                 break;
                             default:	// not an exit we should animate
                                 // just enqueue the toggle exit event
-                                enqueue_event(&toggle_exit, exit_nr, 3*ANIMATION_INTERVAL);
+                                enqueue_event(&toggle_exit, exit_nr, nationIdx, 3*ANIMATION_INTERVAL);
                                 can_consume_key = false;	// Don't consume any more keys till door opened
                                 break;
                             }
-                            consume_prop();
+                            consume_prop(nationIdx);
                         }
                         // For now, the exit is still closed, so we return failure to progress further
                         return 0;
@@ -2322,7 +2346,7 @@ int16_t check_footprint(int16_t dx, int16_t d2y)
                 }
 
                 // +1 as exits start at 0
-                return(readexit(tile_x+exit_dx[0],tile_y-2)+1);
+                return(((guybrush[nationIdx].room==ROOM_OUTSIDE)?comp_readexit(tile_x+exit_dx[0],tile_y-2):room_readexit(tile_x+exit_dx[0],tile_y-2))+1);
             }
             return 0;
         }
@@ -2353,7 +2377,7 @@ int16_t check_footprint(int16_t dx, int16_t d2y)
 // This function MUST immediately follow a call to check_footprint(0,0)
 // Checks if the prisoner can do tunnel I/O
 // Returns >0 if went through a tunnel, <0 if opened a tunnel or 0 if no tunnel action occured
-int16_t check_tunnel_io()
+int16_t check_tunnel_io(int nationIdx)
 {
     uint8_t u;
     int16_t px;
@@ -2362,7 +2386,7 @@ int16_t check_tunnel_io()
 
     // Compute the tile on which we try to stand
     // tile_x and tile_y from previous check_footprint() call are still relevant
-    px = prisoner_x - (in_tunnel?16:0);
+    px = guybrush[nationIdx].px - ((guybrush[nationIdx].state&STATE_TUNNELING)?16:0);
 
     // Check if we are standing on a tunnel exit and set the global variables accordingly
     // If a tunnel exit tool is set, we have a winner
@@ -2375,16 +2399,16 @@ int16_t check_tunnel_io()
             // It may not look like it, but I'd say we do a much better job than
             // the original game, as exiting tunnels was a complete pain there
 
-            if ( ( (!in_tunnel) && (((u == 0) && (px%32 <24 )) || ((u == 1) && (px%32 >=24))) ) ||
-                   ( ( in_tunnel) && ((u == 0) || (u == 2)) ) )
+            if ( ( (!(guybrush[nationIdx].state&STATE_TUNNELING)) && (((u == 0) && (px%32 <24 )) || ((u == 1) && (px%32 >=24))) ) ||
+                   ( ( (guybrush[nationIdx].state&STATE_TUNNELING)) && ((u == 0) || (u == 2)) ) )
             {
                 // We need to spare the exit offset value
                 // NB1: tile_y was incremented twice in the previous check_footprint() call
                 // NB2: exit_flags_offset is a global that will be used in toggle_exit()
                 exit_flags_offset = get_exit_offset(tile_x+(u%2),tile_y-2+(u/2));
-                exit_flags = readbyte(fbuffer[is_inside?ROOMS:TUNNEL_IO], exit_flags_offset);
+                exit_flags = readbyte(fbuffer[(guybrush[nationIdx].room!=ROOM_OUTSIDE)?ROOMS:TUNNEL_IO], exit_flags_offset);
                 // as for regular exits, because we use tunexit_nr as a boolean, we start at +1
-                exit_nr = readexit(tile_x+(u%2),tile_y-2+(u/2)) + 1;
+                exit_nr = ((guybrush[nationIdx].room==ROOM_OUTSIDE)?comp_readexit(tile_x+(u%2),tile_y-2+(u/2)):room_readexit(tile_x+(u%2),tile_y-2+(u/2))) + 1;
                 if (exit_nr == 1)
                 {	// tunexit_tool[] and tile(u%2,u/2) should always match...
                     perr("check_tunnel_io: Exit tile mismatch.\n");
@@ -2393,20 +2417,20 @@ int16_t check_tunnel_io()
 
                 if (!(exit_flags & 0x10))
                 {	// Exit is closed => check for the right prop
-                    if ( (opt_keymaster) || (selected_prop[current_nation] == tunexit_tool[u]) )
+                    if ( (opt_keymaster) || (selected_prop[nationIdx] == tunexit_tool[u]) )
                     {	// Toggle the exit open and consume the relevant item
                         // Play the relevant SFX if needed
-                        if (selected_prop[current_nation] == ITEM_SAW)
+                        if (selected_prop[nationIdx] == ITEM_SAW)
                             play_sfx(SFX_SAW);
-                        else if (!in_tunnel)
+                        else if (!(guybrush[nationIdx].state&STATE_TUNNELING))
                             play_sfx(SFX_WTF);
 
-                        consume_prop();		// doesn't consume if opt_keymaster
+                        consume_prop(nationIdx);		// doesn't consume if opt_keymaster
                         show_prop_count();
                         // We offset exits by 0x100 for toggle_exit to know it's a tunnel
-                        toggle_exit(exit_nr-1 + 0x100);
+                        toggle_exit(exit_nr-1 + 0x100, nationIdx);
 
-                        if (in_tunnel)
+                        if ((guybrush[nationIdx].state&STATE_TUNNELING))
                             // If we're in a tunnel and used the shovel, we exit directly
                             return exit_nr;
                         else
@@ -2414,13 +2438,13 @@ int16_t check_tunnel_io()
                             return -1;
                     }
                 }
-                else if ( (opt_keymaster) || (in_tunnel) ||
-                          (selected_prop[current_nation] == ITEM_CANDLE) )
+                else if ( (opt_keymaster) || ((guybrush[nationIdx].state&STATE_TUNNELING)) ||
+                          (selected_prop[nationIdx] == ITEM_CANDLE) )
                 {	// Exit is open and we're all set to get through it
-                    if (!in_tunnel)
+                    if (!(guybrush[nationIdx].state&STATE_TUNNELING))
                     {
                         // Only consume the candle (because of the if !opt_keymaster in fn)
-                        consume_prop();
+                        consume_prop(nationIdx);
                         show_prop_count();
                     }
                     return exit_nr;
@@ -2526,7 +2550,7 @@ void switch_nation(uint8_t new_nation)
     // if there was any end of ani function, execute it
     if (prisoner_ani.end_of_ani_function != NULL)
     {	// execute the end of animation function (toggle exit)
-        prisoner_ani.end_of_ani_function(prisoner_ani.end_of_ani_parameter);
+        prisoner_ani.end_of_ani_function(prisoner_ani.end_of_ani_parameter, prisoner_ani.end_of_ani_parameter2);
         prisoner_ani.end_of_ani_function = NULL;
     }
     // Clear flags for old nation
@@ -2541,7 +2565,7 @@ void switch_nation(uint8_t new_nation)
 }
 
 // Called when changing rooms
-void switch_room(int16_t exit_nr, bool tunnel_io)
+void switch_room(int16_t exit_nr, bool tunnel_io, int nationIdx)
 {
     uint16_t exit_index;	// exit index in destination room
     uint16_t tile_data = 0;
@@ -2551,21 +2575,21 @@ void switch_room(int16_t exit_nr, bool tunnel_io)
     uint8_t bit_index;
 
     // Let's get through
-    if (is_outside)
+    if ((guybrush[nationIdx].room==ROOM_OUTSIDE))
     {	// If we're on the compressed map, we need to read 2 words (out of 4)
         // from beginning of the ROOMS_MAP file
         offset = exit_nr << 3;	// skip 8 bytes
-        current_room_index = readword((uint8_t*)fbuffer[tunnel_io?TUNNEL_IO:ROOMS], offset) & 0x7FF;
+        guybrush[nationIdx].room = readword((uint8_t*)fbuffer[tunnel_io?TUNNEL_IO:ROOMS], offset) & 0x7FF;
         exit_index = readword((uint8_t*)fbuffer[tunnel_io?TUNNEL_IO:ROOMS], offset+2);
     }
     else
     {	// indoors => read from the ROOMS_EXIT_BASE data
         exit_index = (exit_nr&0xF) - 1;
-        offset = current_room_index << 4;
+        offset = guybrush[nationIdx].room << 4;
         // Now the real clever trick here is that the exit index of the room you
         // just left and the exit index of the one you go always match.
         // Thus, we know where we should get positioned on entering the room
-        current_room_index = readword((uint8_t*)fbuffer[ROOMS], ROOMS_EXITS_BASE + offset
+        guybrush[nationIdx].room = readword((uint8_t*)fbuffer[ROOMS], ROOMS_EXITS_BASE + offset
             + 2*exit_index);
     }
 
@@ -2578,36 +2602,36 @@ void switch_room(int16_t exit_nr, bool tunnel_io)
 //	printb("          to room[%X] (exit_index = %d)\n", current_room_index, exit_index);
 
     // OK, we have now officially changed room, but we still need to position our guy
-    if (current_room_index & 0x8000)	// MSb from ROOMS_EXIT_BASE data means going out
+    if (guybrush[nationIdx].room & 0x8000)	// MSb from ROOMS_EXIT_BASE data means going out
                                         // anything else is inside
     {	// going outside
         room_x = CMP_MAP_WIDTH;		// keep our readtile macros happy
 
         // If we're outside, we need to set the removable mask according to our data's MSB
-        bit_index = (current_room_index >> 8) & 0x7C;
-        rem_bitmask = readlong((uint8_t*)fbuffer[LOADER],  REMOVABLES_MASKS_START + bit_index);
+        bit_index = (guybrush[nationIdx].room >> 8) & 0x7C;
+        guybrush[nationIdx].ext_bitmask = readlong((uint8_t*)fbuffer[LOADER],  REMOVABLES_MASKS_START + bit_index);
 
         // Now, use the tile index (LSB) as an offset to our (x,y) pos
         // NB: The ground floor rooms are in [00-F8]
-        offset = current_room_index & 0xF8;
+        offset = guybrush[nationIdx].room & 0xF8;
         tile_y = readword((uint8_t*)fbuffer[tunnel_io?TUNNEL_IO:ROOMS], offset+4);
         tile_x = readword((uint8_t*)fbuffer[tunnel_io?TUNNEL_IO:ROOMS], offset+6);
 
         // Now that we're done, switch to our actual outbound marker
-        current_room_index = ROOM_OUTSIDE;
+        guybrush[nationIdx].room = ROOM_OUTSIDE;
 
         // Finally, we need to adjust our pos, through the rabbit offset table
         // But only if we're not doing tunnel_io
         if (!tunnel_io)
         {
-            tile_data = ((readtile(tile_x,tile_y) & 0xFF) << 1) - 2;	// first exit tile is 1, not 0
+            tile_data = ((((guybrush[nationIdx].room==ROOM_OUTSIDE)?comp_readtile(tile_x,tile_y):room_readtile(tile_x,tile_y)) & 0xFF) << 1) - 2;	// first exit tile is 1, not 0
             offset = readword((uint8_t*)fbuffer[LOADER], CMP_RABBIT_OFFSET + tile_data);
         }
     }
     else
     {	// going inside, or still inside
         // Get the room dimensions
-        offset = CRM_ROOMS_START + readlong((uint8_t*)fbuffer[ROOMS], CRM_OFFSETS_START+4*current_room_index);
+        offset = CRM_ROOMS_START + readlong((uint8_t*)fbuffer[ROOMS], CRM_OFFSETS_START+4*guybrush[nationIdx].room);
         room_y = readword((uint8_t*)fbuffer[ROOMS], offset);
         offset +=2;
         room_x = readword((uint8_t*)fbuffer[ROOMS], offset);
@@ -2660,7 +2684,7 @@ void switch_room(int16_t exit_nr, bool tunnel_io)
         pixel_x = (int16_t)(readword((uint8_t*)fbuffer[LOADER], HAT_RABBIT_POS_START + offset+2));
         pixel_y = (int16_t)(readword((uint8_t*)fbuffer[LOADER], HAT_RABBIT_POS_START + offset)) + 32;
     }
-    else if (prisoner_state&STATE_TUNNELING)
+    else if (guybrush[nationIdx].state&STATE_TUNNELING)
     {	// Entering a tunnel
         pixel_x = 20;
         pixel_y = 0;
@@ -2671,11 +2695,11 @@ void switch_room(int16_t exit_nr, bool tunnel_io)
         pixel_y = 0;
     }
 
-    prisoner_x = tile_x*32 + pixel_x;
-    prisoner_2y = tile_y*32 + 2*pixel_y - 2;
+    guybrush[nationIdx].px = tile_x*32 + pixel_x;
+    guybrush[nationIdx].p2y = tile_y*32 + 2*pixel_y - 2;
 
     // Don't forget to (re)set the room props
-    set_room_props(current_nation);
+    set_room_props(nationIdx);
 }
 
 
@@ -2713,9 +2737,9 @@ void go_to_jail(uint32_t p)
 
     // Reset all the guards that were in pursuit
     if (opt_enhanced_guards)
-        reset_guards_in_pursuit(p);
+        reset_guards_in_pursuit(p, 0);
     else
-        reinstantiate_guards_in_pursuit(p);
+        reinstantiate_guards_in_pursuit(p, 0);
 
     // Don't forget to (re)set the room props
     set_room_props(p);
@@ -2762,7 +2786,7 @@ void require_pass(uint32_t p)
                     guard(g).state &= ~STATE_AIMING;
                     guard(g).reset_animation = true;
                 }
-            reset_guards_in_pursuit(p);
+            reset_guards_in_pursuit(p, 0);
         }
         else
             reinstantiate_guards_in_pursuit(p);
@@ -2860,7 +2884,7 @@ void check_on_prisoners()
             {
                 // Keep the guard onscreen in aiming position for a little while longer
                 static_screen(PRISONER_SHOT, NULL, 0);
-                enqueue_event(reset_guards_in_pursuit, p, 5000);
+                enqueue_event(reset_guards_in_pursuit, p, 0, 5000);
             }
             else
                 static_screen(PRISONER_SHOT, reinstantiate_guards_in_pursuit, p);

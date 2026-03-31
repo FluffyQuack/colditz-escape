@@ -52,6 +52,8 @@
 #include "soundplayer.h"
 #include "conf.h"
 #include "anti-tampering.h"
+#include "eckbock-input.h"
+#include <xinput.h>
 
 // Global variables
 
@@ -137,20 +139,36 @@ const uint8_t fmd5hash[NB_FILES][16] = FMD5HASHES;
 // OpenGL window size
 int		gl_width, gl_height;
 int16_t	last_p_x = 0, last_p_y = 0;
+s_player_velocity plVelocity[NB_NATIONS];
 int16_t	dx = 0, d2y = 0;
 int16_t	jdx, jd2y;
 // Key modifiers for glut
 int		glut_mod;
 
 // Key handling
+typedef struct {
+    bool key_down[256];
+    bool key_readonce[256];
+    bool key_cheat_readonce[256];
+    unsigned char last_key_used;
+} s_key_input;
+#define KEYINPUT_KEYBOARD 0
+#define KEYINPUT_XINPUT1 1
+#define KEYINPUT_XINPUT2 2
+#define KEYINPUT_XINPUT3 3
+#define KEYINPUT_XINPUT4 4
+#define KEYINPUT_GLUT 5
+#define KEYINPUT_NUM 6
+s_key_input key_input[KEYINPUT_NUM]; // Keyboard + 4 xinputs + glut joystick
+
 bool	key_down[256], key_readonce[256];
-static	__inline bool read_key_once(uint8_t k)
+static	__inline bool read_key_once(uint8_t k, int keyInputIdx)
 {
-    if (key_down[k])
+    if (key_input[keyInputIdx].key_down[k])
     {
-        if (key_readonce[k])
+        if (key_input[keyInputIdx].key_readonce[k])
             return false;
-        key_readonce[k] = true;
+        key_input[keyInputIdx].key_readonce[k] = true;
         return true;
     }
     return false;
@@ -162,13 +180,13 @@ static	__inline bool read_key_once(uint8_t k)
 // we need to check if the cheat keys have been pressed once
 bool key_cheat_readonce[256];
 uint8_t last_key_used = 0;
-static __inline bool read_cheat_key_once(uint8_t k)
+static __inline bool read_cheat_key_once(uint8_t k, int keyInputIdx)
 {
-    if (key_down[k])
+    if (key_input[keyInputIdx].key_down[k])
     {
-        if (key_cheat_readonce[k])
+        if (key_input[keyInputIdx].key_cheat_readonce[k])
             return false;
-        key_cheat_readonce[k] = true;
+        key_input[keyInputIdx].key_cheat_readonce[k] = true;
         return true;
     }
     return false;
@@ -315,6 +333,10 @@ void set_vsync(bool enable)
  */
 static void glut_init()
 {
+    //Fluffy
+    Xinput_Init();
+    memset(key_input, 0, sizeof(key_input));
+
     // Use Glut to create a window
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA);
     glutInitWindowSize(gl_width, gl_height);
@@ -490,75 +512,75 @@ static void glut_reshape (int w, int h)
 
 
 // As its names indicates
-void process_motion(void)
+void process_motion(int nationIdx)
 {
     int16_t new_direction;
     int16_t exit_nr;
 
-    if (prisoner_state & MOTION_DISALLOWED)
+    if (guybrush[nationIdx].state & MOTION_DISALLOWED)
     {	// Only a few states will allow motion
-        dx=0;
-        d2y=0;
+        plVelocity[nationIdx].dx = 0;
+        plVelocity[nationIdx].d2y = 0;
     }
 
     // Check if we're allowed to go where we want
-    if ((dx != 0) || (d2y != 0))
+    if ((plVelocity[nationIdx].dx != 0) || (plVelocity[nationIdx].d2y != 0))
     {
-        exit_nr = check_footprint(dx*prisoner_speed, d2y*prisoner_speed);
+        exit_nr = check_footprint(plVelocity[nationIdx].dx*guybrush[nationIdx].speed, plVelocity[nationIdx].d2y*guybrush[nationIdx].speed, nationIdx);
         if (exit_nr != -1)
         {	// if -1, we move normally
             // in all other cases, we need to stop (even on sucessful exit)
             if (exit_nr > 0)
             {
 //              printb("exit[%d], from room[%X]\n", exit_nr-1, current_room_index);
-                switch_room(exit_nr-1, false);
+                switch_room(exit_nr-1, false, nationIdx);
                 // keep_message_on = false;	// we could do without this
             }
             // Change the last direction so that we use the right sid for stopping
-            prisoner_dir = directions[d2y+1][dx+1];
+            guybrush[nationIdx].direction = directions[plVelocity[nationIdx].d2y+1][plVelocity[nationIdx].dx+1];
 
             // "Freeze!"
-            dx = 0;
-            d2y = 0;
+            plVelocity[nationIdx].dx = 0;
+            plVelocity[nationIdx].d2y = 0;
         }
     }
 
     // Get direction (which is used as an offset to pick the proper animation
-    new_direction = directions[d2y+1][dx+1];
+    new_direction = directions[plVelocity[nationIdx].d2y+1][plVelocity[nationIdx].dx+1];
     // NB: if d2y=0 & dx=0, new_dir = DIRECTION_STOPPED
 
     if (new_direction != DIRECTION_STOPPED)
     {	// We're moving => animate sprite
-        if (!(prisoner_state & STATE_MOTION))
+        if (!(guybrush[nationIdx].state & STATE_MOTION))
         // we were stopped => make sure we start with the proper ani frame
-            prisoner_ani.framecount = 0;
+            guybrush[nationIdx].animation.framecount = 0;
 
         // Update our prisoner data
         // Update the fatigue
-        if (prisoner_state & STATE_TUNNELING)
-            prisoner_fatigue += 0x28;
+        if (guybrush[nationIdx].state & STATE_TUNNELING)
+            p_event[nationIdx].fatigue += 0x28;
         else
         {
-            if (prisoner_fatigue >= MAX_FATIGUE)
+            if (p_event[nationIdx].fatigue >= MAX_FATIGUE)
             {
-                prisoner_speed = 1;
-                prisoner_ani.index = prisoner_as_guard?GUARD_WALK_ANI:WALK_ANI;
+                guybrush[nationIdx].speed = 1;
+                guybrush[nationIdx].animation.index = guybrush[nationIdx].is_dressed_as_guard?GUARD_WALK_ANI:WALK_ANI;
             }
-            prisoner_fatigue += (prisoner_speed==1)?1:4;
+            p_event[nationIdx].fatigue += (guybrush[nationIdx].speed==1)?1:4;
         }
-        if (prisoner_fatigue > MAX_FATIGUE)
-            prisoner_fatigue = MAX_FATIGUE;
+        if (p_event[nationIdx].fatigue > MAX_FATIGUE)
+            p_event[nationIdx].fatigue = MAX_FATIGUE;
 
-        prisoner_x += prisoner_speed*dx;
-        prisoner_2y += prisoner_speed*d2y;
+        guybrush[nationIdx].px += guybrush[nationIdx].speed*plVelocity[nationIdx].dx;
+        guybrush[nationIdx].p2y += guybrush[nationIdx].speed*plVelocity[nationIdx].d2y;
 
-        prisoner_state |= STATE_MOTION;
+        guybrush[nationIdx].state |= STATE_MOTION;
         // Update the animation direction
-        prisoner_dir = new_direction;
+        guybrush[nationIdx].direction = new_direction;
     }
-    else if (prisoner_state & STATE_MOTION)
+    else if (guybrush[nationIdx].state & STATE_MOTION)
     {	// We just stopped
-        prisoner_state ^= STATE_MOTION;
+        guybrush[nationIdx].state ^= STATE_MOTION;
     }
 }
 
@@ -567,7 +589,7 @@ void process_motion(void)
  *	this function expects the guybrush index as well as the previous ani_index
  *	to be concatenated in the lower 2 bytes of the parameter
  */
-void restore_params(uint32_t param)
+void restore_params(uint32_t param, uint32_t unused)
 {
     uint8_t brush, previous_index;
     // extract the guybrush index
@@ -590,6 +612,31 @@ void restore_params(uint32_t param)
     prisoner_reset_ani = true;
 }
 
+//Fluffy
+static void AssignXinputControllerInput_Toggle(unsigned int keyInputIdx, unsigned int keyIdx, unsigned int button, unsigned int buttonMask, unsigned int lastButtonMask)
+{
+    if(keyIdx == KEY_ACTION && buttonMask & XINPUT_GAMEPAD_A)
+        keyIdx = keyIdx;
+    if((buttonMask & button) && !(lastButtonMask & button))
+    {
+        key_input[keyInputIdx].key_down[keyIdx] = true;
+        key_input[keyInputIdx].last_key_used = keyIdx;
+    }
+    else if (!(buttonMask & button) && (lastButtonMask & button))
+    {
+        key_input[keyInputIdx].key_down[keyIdx] = false;
+        key_input[keyInputIdx].key_readonce[keyIdx] = false;
+        key_input[keyInputIdx].key_cheat_readonce[keyIdx] = false;
+    }
+}
+
+static void AssignXinputControllerInput_Held(unsigned int keyInputIdx, unsigned int keyIdx, unsigned int button, unsigned int buttonMask)
+{
+    if((buttonMask & button))
+        key_input[keyInputIdx].key_down[keyIdx] = true;
+    else
+        key_input[keyInputIdx].key_down[keyIdx] = false;
+}
 
 // Act on user input (keys, joystick)
 void user_input()
@@ -599,15 +646,71 @@ void user_input()
     int16_t  exit_nr;
     uint8_t  cur_prop;
 
+    //Fluffy
+    Xinput_Update(); //Read current controller states
+    static unsigned int last_buttonMask[KEYINPUT_NUM] = {0,0,0,0,0,0};
+    unsigned int controllerIdx = 0;
+    for(int i = KEYINPUT_XINPUT1; i <= KEYINPUT_XINPUT4; i++)
+    {
+        unsigned int buttonMask = 0;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_DPAD_UP, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_DPAD_UP;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_DPAD_DOWN, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_DPAD_DOWN;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_DPAD_LEFT, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_DPAD_LEFT;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_DPAD_RIGHT, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_DPAD_RIGHT;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_START, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_START;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_BACK, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_BACK;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_LEFT_THUMB, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_LEFT_THUMB;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_RIGHT_THUMB, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_RIGHT_THUMB;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_LEFT_SHOULDER, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_LEFT_SHOULDER;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_RIGHT_SHOULDER, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_RIGHT_SHOULDER;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_LT, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_LT;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_RT, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_RT;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_A, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_A;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_B, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_B;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_X, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_X;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_Y, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_Y;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_LEFTSTICK_UP, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_LEFTSTICK_UP;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_LEFTSTICK_DOWN, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_LEFTSTICK_DOWN;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_LEFTSTICK_LEFT, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_LEFTSTICK_LEFT;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_LEFTSTICK_RIGHT, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_LEFTSTICK_RIGHT;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_RIGHTSTICK_UP, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_RIGHTSTICK_UP;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_RIGHTSTICK_DOWN, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_RIGHTSTICK_DOWN;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_RIGHTSTICK_LEFT, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_RIGHTSTICK_LEFT;
+        if(Xinput_InputCheck(XINPUT_GAMEPAD_RIGHTSTICK_RIGHT, controllerIdx)) buttonMask |= XINPUT_GAMEPAD_RIGHTSTICK_RIGHT;
+        
+        if(buttonMask != last_buttonMask[i])
+        {
+            AssignXinputControllerInput_Toggle(i, KEY_ACTION, XINPUT_GAMEPAD_A, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Toggle(i, KEY_CANCEL, XINPUT_GAMEPAD_B, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Toggle(i, KEY_SLEEP, XINPUT_GAMEPAD_X, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Toggle(i, KEY_INVENTORY_PICKUP, XINPUT_GAMEPAD_DPAD_UP, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Toggle(i, KEY_INVENTORY_DROP, XINPUT_GAMEPAD_DPAD_DOWN, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Toggle(i, KEY_INVENTORY_LEFT, XINPUT_GAMEPAD_DPAD_LEFT, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Toggle(i, KEY_INVENTORY_RIGHT, XINPUT_GAMEPAD_DPAD_RIGHT, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Toggle(i, KEY_TOGGLE_WALK_RUN, XINPUT_GAMEPAD_RT, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Toggle(i, KEY_STOOGE, XINPUT_GAMEPAD_LT, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Toggle(i, KEY_PRISONER_LEFT, XINPUT_GAMEPAD_LEFT_SHOULDER, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Toggle(i, KEY_PRISONER_RIGHT, XINPUT_GAMEPAD_RIGHT_SHOULDER, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Toggle(i, KEY_ESCAPE, XINPUT_GAMEPAD_START, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Toggle(i, KEY_PAUSE, XINPUT_GAMEPAD_BACK, buttonMask, last_buttonMask[i]);
+            AssignXinputControllerInput_Held(i, KEY_DIRECTION_UP, XINPUT_GAMEPAD_LEFTSTICK_UP, buttonMask);
+            AssignXinputControllerInput_Held(i, KEY_DIRECTION_DOWN, XINPUT_GAMEPAD_LEFTSTICK_DOWN, buttonMask);
+            AssignXinputControllerInput_Held(i, KEY_DIRECTION_LEFT, XINPUT_GAMEPAD_LEFTSTICK_LEFT, buttonMask);
+            AssignXinputControllerInput_Held(i, KEY_DIRECTION_RIGHT, XINPUT_GAMEPAD_LEFTSTICK_RIGHT, buttonMask);
+            last_buttonMask[i] = buttonMask;
+        }
+        controllerIdx++;
+    }
+
 #if !defined(PSP)
     // Hey, GLUT, where's my bleeping callback on Windows?
     // NB: The routine is not called if there's no joystick
     //     and the force func does not exist on PSP
-    glutForceJoystickFunc();
+    //glutForceJoystickFunc();
 #endif
 
     // Access the menu
-    if (read_key_once(KEY_ESCAPE))
+    if (read_key_once(KEY_ESCAPE, KEYINPUT_KEYBOARD))
     {
         game_state |= GAME_STATE_MENU;
         selected_menu = MAIN_MENU;
@@ -619,7 +722,7 @@ void user_input()
     }
 
     // Handle the pausing of the game
-    if (read_key_once(KEY_PAUSE))
+    if (read_key_once(KEY_PAUSE, KEYINPUT_KEYBOARD))
     {
         game_state |= GAME_STATE_PAUSED;
         picture_state = GAME_FADE_OUT_START;
@@ -629,7 +732,7 @@ void user_input()
 
     // Prisoner selection: direct keys or left/right cycle keys
     for (i=0; i<(NB_NATIONS+2); i++)
-        if (read_key_once(key_nation[i]))
+        if (read_key_once(key_nation[i], KEYINPUT_KEYBOARD))
         {
             // Unpause the game if required
             if (game_state & GAME_STATE_PAUSED)
@@ -647,7 +750,7 @@ void user_input()
 
 #if defined (CHEATMODE_ENABLED)
     // Check cheat sequences
-    if ((!opt_original_mode) && read_cheat_key_once(last_key_used))
+    if ((!opt_original_mode) && read_cheat_key_once(last_key_used, KEYINPUT_KEYBOARD))
     {
         for (i=0; i<NB_CHEAT_SEQUENCES; i++)
         {
@@ -701,7 +804,7 @@ void user_input()
     }
 #endif
 
-    if (read_key_once('#'))
+    if (read_key_once('#', KEYINPUT_KEYBOARD))
         opt_display_fps = !opt_display_fps;
 
 #if defined(DEBUG_ENABLED)
@@ -711,7 +814,7 @@ void user_input()
 #define KEY_NEXT_SID			'+'
 #define KEY_PREV_SID			'-'
     // Display our current position
-    if (read_key_once(KEY_DEBUG_PRINT_POS))
+    if (read_key_once(KEY_DEBUG_PRINT_POS, KEYINPUT_KEYBOARD))
     {
         printf("game_time = %lld, program_time = %lld, state = 0x%02X\n",
             game_time, program_time, prisoner_state);
@@ -719,254 +822,268 @@ void user_input()
             current_room_index, prisoner_x, prisoner_2y, rem_bitmask);
     }
 
-    if (read_key_once(KEY_OSD))
+    if (read_key_once(KEY_OSD, KEYINPUT_KEYBOARD))
         opt_onscreen_debug = !opt_onscreen_debug;
 
     if (opt_sid >= 0)
     {
-        if (read_key_once(KEY_NEXT_SID))
+        if (read_key_once(KEY_NEXT_SID, KEYINPUT_KEYBOARD))
             opt_sid++;
-        if (read_key_once(KEY_PREV_SID))
+        if (read_key_once(KEY_PREV_SID, KEYINPUT_KEYBOARD))
             opt_sid--;
     }
 #endif
 
-    // Above are all the keys allowed if the prisoner has not already escaped or died, thus...
-    if (has_escaped || is_dead)
-        return;
-
-    // Walk/Run toggle
-    if (read_key_once(KEY_TOGGLE_WALK_RUN) && (!in_tunnel) &&
-        // Not checking for the following leads to issues
-         ( (prisoner_ani.index == RUN_ANI) ||
-           (prisoner_ani.index == WALK_ANI) ||
-           (prisoner_ani.index == GUARD_RUN_ANI) ||
-           (prisoner_ani.index == GUARD_WALK_ANI) )
-       )
+    for(int i = 0; i < NB_NATIONS; i++)
     {
-        if  ((prisoner_speed == 1) && (prisoner_fatigue < MAX_FATIGUE) )
-        {
-            prisoner_speed = 2;
-            prisoner_ani.index = prisoner_as_guard?GUARD_RUN_ANI:RUN_ANI;
-        }
-        else
-        {
-            prisoner_speed = 1;
-            prisoner_ani.index = prisoner_as_guard?GUARD_WALK_ANI:WALK_ANI;
-        }
-        prisoner_ani.framecount = 0;
-    }
+        int keyInputIdx = 0;
+        if(i == 0) keyInputIdx = KEYINPUT_XINPUT1;
+        else if(i == 1) keyInputIdx = KEYINPUT_XINPUT2;
+        else if(i == 2) keyInputIdx = KEYINPUT_XINPUT3;
+        else if(i == 3) keyInputIdx = KEYINPUT_XINPUT4;
 
-    // Toggle stooge
-    if (read_key_once(KEY_STOOGE))
-        prisoner_state ^= STATE_STOOGING;
-
-    // Even if we're idle, we might be trying to open a tunnel exit, or use a prop
-    if (read_key_once(KEY_ACTION))
-    {
-        // We need to set this variable as we might check if fire is pressed
-        // in various subroutines below
-        is_fire_pressed = true;
-
-        // Handle tunnel I/O through a check_footprint(0,0) call immediately followed
-        // by a check_tunnel_io
-        check_footprint(0,0);
-        exit_nr = check_tunnel_io();
-
-        if (exit_nr > 0)
-        {	// We just went through a tunnel exit
-            // => Toggle tunneling state
-            prisoner_state ^= STATE_TUNNELING;
-            switch_room(exit_nr-1, true);
-        }
-        else if (exit_nr < 0)
-        {	// We used a prop to open a tunnel => cue in animation
-            prisoner_state |= STATE_ANIMATED;
-            // enqueue our 2 u8 parameters
-            prisoner_ani.end_of_ani_parameter = (current_nation & 0xFF) |
-                ((prisoner_ani.index << 8) & 0xFF00);
-            prisoner_ani.index = prisoner_as_guard?GUARD_KNEEL_ANI:KNEEL_ANI;
-            // Make sure we go through frame 0
-            prisoner_ani.framecount = 0;
-            prisoner_ani.end_of_ani_function = restore_params;
-        }
-        else
-        {	// Are we trying to use some non tunnel I/O related prop?
-            switch(cur_prop = selected_prop[current_nation])
-            {
-            case ITEM_GUARDS_UNIFORM:
-            case ITEM_PRISONERS_UNIFORM:
-                if ( (!in_tunnel) &&
-                     ( ((cur_prop == ITEM_GUARDS_UNIFORM) && (!prisoner_as_guard)) ||
-                       ((cur_prop == ITEM_PRISONERS_UNIFORM) && (prisoner_as_guard) ) ) )
-                {
-                    prisoner_as_guard = (cur_prop == ITEM_GUARDS_UNIFORM);
-                    consume_prop();
-                    show_prop_count();
-                    // Set the animation for changing into guard's clothes
-                    prisoner_state |= STATE_ANIMATED+STATE_KNEELING;
-                    prisoner_ani.end_of_ani_parameter = (current_nation & 0xFF) |
-                        ((prisoner_ani.index << 8) & 0xFF00);
-                    prisoner_ani.index = (cur_prop == ITEM_GUARDS_UNIFORM)?
-                        INTO_GUARDS_UNI_ANI:INTO_PRISONERS_UNI_ANI;
-                    prisoner_ani.framecount = 0;
-                    prisoner_ani.end_of_ani_function = restore_params;
-                    // The original game leaves us turned away at the end of the animation
-                    prisoner_dir = 2;
-                }
-                break;
-            case ITEM_STONE:
-                consume_prop();
-                show_prop_count();
-                p_event[current_nation].thrown_stone = true;
-                break;
-            default:
-                break;
-            }
-        }
-    }
-
-    if ( (prisoner_state & STATE_SLEEPING) && read_key_once(KEY_SLEEP) )
-    {	// Out of bed
-        prisoner_state &= ~STATE_SLEEPING;
-        prisoner_x = readword(fbuffer[LOADER],INITIAL_POSITION_BASE+10*current_nation+2)-16;
-        prisoner_2y = 2*readword(fbuffer[LOADER],INITIAL_POSITION_BASE+10*current_nation)-8;
-        prisoner_reset_ani = true;
-    }
-    else if (!(prisoner_state & MOTION_DISALLOWED))
-    {	// The following keys are only handled if we are in a premissible state
-
-        // Inventory cycle
-        if ( (read_key_once(KEY_INVENTORY_LEFT)) ||
-             (read_key_once(KEY_INVENTORY_RIGHT)) )
-        {
-            prop_id = selected_prop[current_nation];
-            direction = key_down[KEY_INVENTORY_LEFT]?0x0F:1;
-            do
-                prop_id = (prop_id + direction) & 0x0F;
-            while ( (!props[current_nation][prop_id]) && (prop_id != selected_prop[current_nation]) );
-            if (props[current_nation][prop_id])
-            // we found a non empty item
-            {
-                selected_prop[current_nation] = prop_id;
-                // Display our props count
-                update_props_message(prop_id);
-                show_prop_count();
-            }
-            else
-                selected_prop[current_nation] = 0;
-        }
-
-        // Inventory pickup/dropdown
-        if ( ( (read_key_once(KEY_INVENTORY_PICKUP)) ||
-               (read_key_once(KEY_INVENTORY_DROP)) ) &&
-               (!(prisoner_state & STATE_TUNNELING)) )
-        {
-            prisoner_state |= STATE_ANIMATED|STATE_KNEELING;
-            // enqueue our 2 u8 parameters
-            prisoner_ani.end_of_ani_parameter = (current_nation & 0xFF) |
-                ((prisoner_ani.index << 8) & 0xFF00);
-            prisoner_ani.index = prisoner_as_guard?GUARD_KNEEL_ANI:KNEEL_ANI;
-            // Make sure we go through frame 0
-            prisoner_ani.framecount = 0;
-            prisoner_ani.end_of_ani_function = restore_params;
-
-            if (key_down[KEY_INVENTORY_PICKUP])
-            {	// picking up
-                if (roomProps[current_nation].over_prop) //Fluffy TODO: Handle for each nation
-                {
-                    prop_offset = roomProps[current_nation].room_props[roomProps[current_nation].over_prop-1]; //Fluffy TODO: Handle for each nation
-                    roomProps[current_nation].room_props[roomProps[current_nation].over_prop-1] = 0; //Fluffy TODO: Handle for each nation
-                    // change the room index to an invalid one
-                    writeword(fbuffer[OBJECTS],prop_offset,ROOM_NO_PROP);
-                    props[current_nation][roomProps[current_nation].over_prop_id]++; //Fluffy TODO: Handle for each nation
-                    selected_prop[current_nation] = roomProps[current_nation].over_prop_id; //Fluffy TODO: Handle for each nation
-                    show_prop_count();
-                }
-            }
-            else
-            {	// dropdown
-                if (selected_prop[current_nation])
-                {
-                    found = false;
-                    roomProps[current_nation].over_prop_id = selected_prop[current_nation]; //Fluffy TODO: Handle for each nation
-                    // OK, now we'll look for an picked object space in obs.bin to store
-                    // our data
-                    for (prop_offset=2; prop_offset<(8*nb_objects+2); prop_offset+=8)
-                    {
-                        if (readword(fbuffer[OBJECTS],prop_offset) == ROOM_NO_PROP)
-                        {	// There should always be at least one
-                            // Add the prop to our current room
-                            roomProps[current_nation].room_props[roomProps[current_nation].nb_room_props] = prop_offset; //Fluffy TODO: Handle for each nation
-                            roomProps[current_nation].nb_room_props++; //Fluffy TODO: Handle for each nation
-                            // Write down the relevant value in obs.bin
-                            // 1. Room number
-                            writeword(fbuffer[OBJECTS],prop_offset,current_room_index);
-                            // 2. x & y pos
-                            writeword(fbuffer[OBJECTS],prop_offset+4, prisoner_x + 16);
-                            writeword(fbuffer[OBJECTS],prop_offset+2, prisoner_2y/2 + 4);
-                            // 3. object id
-                            writeword(fbuffer[OBJECTS],prop_offset+6, roomProps[current_nation].over_prop_id); //Fluffy TODO: Handle for each nation
-                            found = true;
-                            break;
-                        }
-                    }
-                    if (!found)		// Somebody's cheating!
-                        perr("Could not find any free prop variable => discarding prop.\n");
-
-                    props[current_nation][roomProps[current_nation].over_prop_id]--; //Fluffy TODO: Handle for each nation
-                    if (props[current_nation][roomProps[current_nation].over_prop_id] == 0) //Fluffy TODO: Handle for each nation
-                    // display the empty box if last prop
-                        selected_prop[current_nation] = 0;
-                    // don't care to much about reconstructing over_prop, as the next redisplay
-                    // will take care of it
-                    roomProps[current_nation].over_prop = 0; //Fluffy TODO: Handle for each nation
-                    roomProps[current_nation].over_prop_id = 0; //Fluffy TODO: Handle for each nation
-                }
-            }
-
-            //Fluffy: Update room props for every player in case an item was dropped/picked up in the same room as another nation
-            for(int nationIdx = 0; nationIdx < NB_NATIONS; nationIdx++)
-                set_room_props(nationIdx);
-
+        // Above are all the keys allowed if the prisoner has not already escaped or died, thus...
+        if (p_event[i].escaped || (guybrush[i].state & STATE_SHOT))
             return;
+
+        // Walk/Run toggle
+        if (read_key_once(KEY_TOGGLE_WALK_RUN, keyInputIdx) && (!(guybrush[i].state & STATE_TUNNELING)) &&
+            // Not checking for the following leads to issues
+             ( (guybrush[i].animation.index == RUN_ANI) ||
+               (guybrush[i].animation.index == WALK_ANI) ||
+               (guybrush[i].animation.index == GUARD_RUN_ANI) ||
+               (guybrush[i].animation.index == GUARD_WALK_ANI) )
+           )
+        {
+            if  ((guybrush[i].speed == 1) && (p_event[i].fatigue < MAX_FATIGUE) )
+            {
+                guybrush[i].speed = 2;
+                guybrush[i].animation.index = guybrush[i].is_dressed_as_guard?GUARD_RUN_ANI:RUN_ANI;
+            }
+            else
+            {
+                guybrush[i].speed = 1;
+                guybrush[i].animation.index = guybrush[i].is_dressed_as_guard?GUARD_WALK_ANI:WALK_ANI;
+            }
+            guybrush[i].animation.framecount = 0;
         }
 
-        // Sleep
-        if ( (read_key_once(KEY_SLEEP)) &&
-             (current_room_index == readword(fbuffer[LOADER],INITIAL_POSITION_BASE+10*current_nation+4)) &&
-             (!(prisoner_state & STATE_SLEEPING)) )
-        {	// Go to bed
-            prisoner_x = readword(fbuffer[LOADER],INITIAL_POSITION_BASE+10*current_nation+8) - 9;
-            prisoner_2y = 2*readword(fbuffer[LOADER],INITIAL_POSITION_BASE+10*current_nation+6) - 28;
-            prisoner_state |= STATE_SLEEPING;
-            prisoner_ani.index = SLEEP_ANI;
-            prisoner_ani.framecount = 0;
-            prisoner_ani.end_of_ani_function = NULL;
+        // Toggle stooge
+        if (read_key_once(KEY_STOOGE, keyInputIdx))
+            guybrush[i].state ^= STATE_STOOGING;
+
+        // Even if we're idle, we might be trying to open a tunnel exit, or use a prop
+        if (read_key_once(KEY_ACTION, keyInputIdx))
+        {
+            // We need to set this variable as we might check if fire is pressed
+            // in various subroutines below
+            is_fire_pressed = true;
+
+            // Handle tunnel I/O through a check_footprint(0,0) call immediately followed
+            // by a check_tunnel_io
+            check_footprint(0,0, i);
+            exit_nr = check_tunnel_io(i);
+
+            if (exit_nr > 0)
+            {	// We just went through a tunnel exit
+                // => Toggle tunneling state
+                guybrush[i].state ^= STATE_TUNNELING;
+                switch_room(exit_nr-1, true, i);
+            }
+            else if (exit_nr < 0)
+            {	// We used a prop to open a tunnel => cue in animation
+                guybrush[i].state |= STATE_ANIMATED;
+                // enqueue our 2 u8 parameters
+                guybrush[i].animation.end_of_ani_parameter = (i & 0xFF) |
+                    ((guybrush[i].animation.index << 8) & 0xFF00);
+                guybrush[i].animation.index = prisoner_as_guard?GUARD_KNEEL_ANI:KNEEL_ANI;
+                // Make sure we go through frame 0
+                guybrush[i].animation.framecount = 0;
+                guybrush[i].animation.end_of_ani_function = restore_params;
+                guybrush[i].animation.end_of_ani_parameter2 = 0;
+            }
+            else
+            {	// Are we trying to use some non tunnel I/O related prop?
+                switch(cur_prop = selected_prop[i])
+                {
+                case ITEM_GUARDS_UNIFORM:
+                case ITEM_PRISONERS_UNIFORM:
+                    if ( (!(guybrush[i].state&STATE_TUNNELING)) &&
+                         ( ((cur_prop == ITEM_GUARDS_UNIFORM) && (!guybrush[i].is_dressed_as_guard)) ||
+                           ((cur_prop == ITEM_PRISONERS_UNIFORM) && (guybrush[i].is_dressed_as_guard) ) ) )
+                    {
+                        guybrush[i].is_dressed_as_guard = (cur_prop == ITEM_GUARDS_UNIFORM);
+                        consume_prop(i);
+                        show_prop_count();
+                        // Set the animation for changing into guard's clothes
+                        prisoner_state |= STATE_ANIMATED+STATE_KNEELING;
+                        guybrush[i].animation.end_of_ani_parameter = (current_nation & 0xFF) |
+                            ((guybrush[i].animation.index << 8) & 0xFF00);
+                        guybrush[i].animation.index = (cur_prop == ITEM_GUARDS_UNIFORM)?
+                            INTO_GUARDS_UNI_ANI:INTO_PRISONERS_UNI_ANI;
+                        guybrush[i].animation.framecount = 0;
+                        guybrush[i].animation.end_of_ani_function = restore_params;
+                        guybrush[i].animation.end_of_ani_parameter2 = 0;
+                        // The original game leaves us turned away at the end of the animation
+                        prisoner_dir = 2;
+                    }
+                    break;
+                case ITEM_STONE:
+                    consume_prop(i);
+                    show_prop_count();
+                    p_event[i].thrown_stone = true;
+                    break;
+                default:
+                    break;
+                }
+            }
         }
 
-        if (read_key_once(KEY_STOOGE))
-            play_sfx(0);
+        if ( (guybrush[i].state & STATE_SLEEPING) && read_key_once(KEY_SLEEP, keyInputIdx) )
+        {	// Out of bed
+            guybrush[i].state &= ~STATE_SLEEPING;
+            guybrush[i].px = readword(fbuffer[LOADER],INITIAL_POSITION_BASE+10*i+2)-16;
+            guybrush[i].p2y = 2*readword(fbuffer[LOADER],INITIAL_POSITION_BASE+10*i)-8;
+            prisoner_reset_ani = true;
+        }
+        else if (!(guybrush[i].state & MOTION_DISALLOWED))
+        {	// The following keys are only handled if we are in a premissible state
+
+            // Inventory cycle
+            if ( (read_key_once(KEY_INVENTORY_LEFT, keyInputIdx)) ||
+                 (read_key_once(KEY_INVENTORY_RIGHT, keyInputIdx)) )
+            {
+                prop_id = selected_prop[i];
+                direction = key_down[KEY_INVENTORY_LEFT]?0x0F:1;
+                do
+                    prop_id = (prop_id + direction) & 0x0F;
+                while ( (!props[i][prop_id]) && (prop_id != selected_prop[i]) );
+                if (props[i][prop_id])
+                // we found a non empty item
+                {
+                    selected_prop[i] = prop_id;
+                    // Display our props count
+                    update_props_message(prop_id);
+                    show_prop_count();
+                }
+                else
+                    selected_prop[i] = 0;
+            }
+
+            // Inventory pickup/dropdown
+            if ( ( (read_key_once(KEY_INVENTORY_PICKUP, keyInputIdx)) ||
+                   (read_key_once(KEY_INVENTORY_DROP, keyInputIdx)) ) &&
+                   (!(guybrush[i].state & STATE_TUNNELING)) )
+            {
+                guybrush[i].state |= STATE_ANIMATED|STATE_KNEELING;
+                // enqueue our 2 u8 parameters
+                guybrush[i].animation.end_of_ani_parameter = (i & 0xFF) |
+                    ((guybrush[i].animation.index << 8) & 0xFF00);
+                guybrush[i].animation.index = guybrush[i].is_dressed_as_guard?GUARD_KNEEL_ANI:KNEEL_ANI;
+                // Make sure we go through frame 0
+                guybrush[i].animation.framecount = 0;
+                guybrush[i].animation.end_of_ani_function = restore_params;
+                guybrush[i].animation.end_of_ani_parameter2 = 0;
+
+                if (key_input[keyInputIdx].key_down[KEY_INVENTORY_PICKUP])
+                {	// picking up
+                    if (roomProps[i].over_prop)
+                    {
+                        prop_offset = roomProps[i].room_props[roomProps[i].over_prop-1];
+                        roomProps[i].room_props[roomProps[i].over_prop-1] = 0;
+                        // change the room index to an invalid one
+                        writeword(fbuffer[OBJECTS],prop_offset,ROOM_NO_PROP);
+                        props[i][roomProps[i].over_prop_id]++;
+                        selected_prop[i] = roomProps[i].over_prop_id;
+                        show_prop_count();
+                    }
+                }
+                else
+                {	// dropdown
+                    if (selected_prop[i])
+                    {
+                        found = false;
+                        roomProps[i].over_prop_id = selected_prop[i];
+                        // OK, now we'll look for an picked object space in obs.bin to store
+                        // our data
+                        for (prop_offset=2; prop_offset<(8*nb_objects+2); prop_offset+=8)
+                        {
+                            if (readword(fbuffer[OBJECTS],prop_offset) == ROOM_NO_PROP)
+                            {	// There should always be at least one
+                                // Add the prop to our current room
+                                roomProps[i].room_props[roomProps[i].nb_room_props] = prop_offset;
+                                roomProps[i].nb_room_props++;
+                                // Write down the relevant value in obs.bin
+                                // 1. Room number
+                                writeword(fbuffer[OBJECTS],prop_offset,current_room_index);
+                                // 2. x & y pos
+                                writeword(fbuffer[OBJECTS],prop_offset+4, prisoner_x + 16);
+                                writeword(fbuffer[OBJECTS],prop_offset+2, prisoner_2y/2 + 4);
+                                // 3. object id
+                                writeword(fbuffer[OBJECTS],prop_offset+6, roomProps[i].over_prop_id);
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found)		// Somebody's cheating!
+                            perr("Could not find any free prop variable => discarding prop.\n");
+
+                        props[i][roomProps[i].over_prop_id]--;
+                        if (props[i][roomProps[i].over_prop_id] == 0)
+                        // display the empty box if last prop
+                            selected_prop[i] = 0;
+                        // don't care to much about reconstructing over_prop, as the next redisplay
+                        // will take care of it
+                        roomProps[i].over_prop = 0;
+                        roomProps[i].over_prop_id = 0;
+                    }
+                }
+
+                //Fluffy: Update room props for every player in case an item was dropped/picked up in the same room as another nation
+                for(int nationIdx = 0; nationIdx < NB_NATIONS; nationIdx++)
+                    set_room_props(nationIdx);
+
+                return;
+            }
+
+            // Sleep
+            if ( (read_key_once(KEY_SLEEP, keyInputIdx)) &&
+                 (guybrush[i].room == readword(fbuffer[LOADER],INITIAL_POSITION_BASE+10*i+4)) &&
+                 (!(guybrush[i].state & STATE_SLEEPING)) )
+            {	// Go to bed
+                guybrush[i].px = readword(fbuffer[LOADER],INITIAL_POSITION_BASE+10*i+8) - 9;
+                guybrush[i].p2y = 2*readword(fbuffer[LOADER],INITIAL_POSITION_BASE+10*i+6) - 28;
+                guybrush[i].state |= STATE_SLEEPING;
+                guybrush[i].animation.index = SLEEP_ANI;
+                guybrush[i].animation.framecount = 0;
+                guybrush[i].animation.end_of_ani_function = NULL;
+            }
+
+            if (read_key_once(KEY_STOOGE, keyInputIdx))
+                play_sfx(0);
+        }
+
+        //
+        // Finally, we handle motion
+        //
+
+        if (key_input[keyInputIdx].key_down[KEY_DIRECTION_LEFT])
+            plVelocity[i].dx = -1;
+        else if (key_input[keyInputIdx].key_down[KEY_DIRECTION_RIGHT])
+            plVelocity[i].dx = +1;
+
+        if (key_input[keyInputIdx].key_down[KEY_DIRECTION_UP])
+            plVelocity[i].d2y = -1;
+        else if (key_input[keyInputIdx].key_down[KEY_DIRECTION_DOWN])
+            plVelocity[i].d2y = +1;
+
+        //Fluffy TODO
+        // Joystick motion overrides keys
+        /*if (jdx)
+            dx = jdx;
+        if (jd2y)
+            d2y = jd2y;*/
     }
-
-    //
-    // Finally, we handle motion
-    //
-    if (key_down[KEY_DIRECTION_LEFT])
-        dx = -1;
-    else if (key_down[KEY_DIRECTION_RIGHT])
-        dx = +1;
-
-    if (key_down[KEY_DIRECTION_UP])
-        d2y = -1;
-    else if (key_down[KEY_DIRECTION_DOWN])
-        d2y = +1;
-
-    // Joystick motion overrides keys
-    if (jdx)
-        dx = jdx;
-    if (jd2y)
-        d2y = jd2y;
 }
 
 
@@ -976,6 +1093,11 @@ static void glut_idle_game(void)
     uint8_t i;
 
     // Reset the motion
+    for(int i = 0; i < NB_NATIONS; i++)
+    {
+        plVelocity[i].dx = 0;
+        plVelocity[i].d2y = 0;
+    }
     dx = 0;
     d2y = 0;
 
@@ -1055,7 +1177,7 @@ static void glut_idle_game(void)
                 continue;
             if (game_time > events[i].expiration_time)
             {	// Execute the timeout function
-                events[i].function(events[i].parameter);
+                events[i].function(events[i].parameter, events[i].parameter2);
                 // Make the event available again
                 events[i].function = NULL;
             }
@@ -1071,6 +1193,9 @@ static void glut_idle_game(void)
     {
         last_ptime = game_time;
 
+        //Fluffy: move_guards() also calls process_motion() for each nation
+        move_guards();
+        /*
         // Update the guards positions (if not playing with guards disabled)
         if (!opt_no_guards && move_guards())
         {	// we have a collision with a guard => kill our motion
@@ -1082,7 +1207,7 @@ static void glut_idle_game(void)
         }
         else
         // Update our guy's position
-            process_motion();
+            process_motion(current_nation); //Fluffy TODO*/
         // Do we have something going on with a prisoner (request, caught, release...)
         check_on_prisoners();
         // Only reset the fire action AFTER we processed motion
@@ -1148,28 +1273,28 @@ static void glut_idle_game(void)
 
 void process_menu()
 {
-    bool cancel_selected = read_key_once(KEY_CANCEL);
+    bool cancel_selected = read_key_once(KEY_CANCEL, KEYINPUT_KEYBOARD);
     char save_name[] = "colditz_00.sav";
 #if !defined(PSP)
     static int old_w=2*PSP_SCR_WIDTH, old_h=2*PSP_SCR_HEIGHT;
 #endif
 
     // Menu navigation (up or down)
-    if (read_key_once(SPECIAL_KEY_UP) || read_key_once(KEY_DIRECTION_UP))
+    if (read_key_once(SPECIAL_KEY_UP, KEYINPUT_KEYBOARD) || read_key_once(KEY_DIRECTION_UP, KEYINPUT_KEYBOARD))
     {
         do
             selected_menu_item = (selected_menu_item+NB_MENU_ITEMS-1)%NB_MENU_ITEMS;
         while (!enabled_menus[selected_menu][selected_menu_item]);
     }
-    if (read_key_once(SPECIAL_KEY_DOWN) || read_key_once(KEY_DIRECTION_DOWN))
+    if (read_key_once(SPECIAL_KEY_DOWN, KEYINPUT_KEYBOARD) || read_key_once(KEY_DIRECTION_DOWN, KEYINPUT_KEYBOARD))
     {
         do
             selected_menu_item = (selected_menu_item+1)%NB_MENU_ITEMS;
         while (!enabled_menus[selected_menu][selected_menu_item]);
     }
 
-    if (read_key_once(KEY_ACTION) || read_key_once(0x0D) || read_key_once(' ') ||
-        read_key_once(SPECIAL_KEY_LEFT) || read_key_once(SPECIAL_KEY_RIGHT) || cancel_selected)
+    if (read_key_once(KEY_ACTION, KEYINPUT_KEYBOARD) || read_key_once(0x0D, KEYINPUT_KEYBOARD) || read_key_once(' ', KEYINPUT_KEYBOARD) ||
+        read_key_once(SPECIAL_KEY_LEFT, KEYINPUT_KEYBOARD) || read_key_once(SPECIAL_KEY_RIGHT, KEYINPUT_KEYBOARD) || cancel_selected)
     {
         switch (selected_menu)
         {
@@ -1326,7 +1451,7 @@ static void glut_idle_static_pic(void)
     if (game_menu)
         process_menu();
 
-    if ((intro) && read_key_once(last_key_used))
+    if ((intro) && read_key_once(last_key_used, KEYINPUT_KEYBOARD))
     {	// Exit intro => start new game
         mod_release();
         newgame_init();
@@ -1335,7 +1460,7 @@ static void glut_idle_static_pic(void)
         last_key_used = 0;
     }
     else if (game_over && (picture_state > GAME_FADE_OUT) && (picture_state < PICTURE_FADE_OUT_START)
-        && read_key_once(last_key_used))
+        && read_key_once(last_key_used, KEYINPUT_KEYBOARD))
     {	// Exit game over/game won => Intro
         mod_release();
         picture_state = PICTURE_FADE_OUT_START;
@@ -1445,14 +1570,14 @@ static void glut_idle_static_pic(void)
     case PICTURE_WAIT:
         if (game_menu)
         {
-            if (read_key_once(KEY_ESCAPE))
+            if (read_key_once(KEY_ESCAPE, KEYINPUT_KEYBOARD))
             {
                 if ((config_save) && (!write_conf(confname)))
                     perr("Error rewritting %s.\n", confname);
                 picture_state = GAME_FADE_IN_START;
             }
         }
-        else if (read_key_once(last_key_used) ||
+        else if (read_key_once(last_key_used, KEYINPUT_KEYBOARD) ||
             ( (!game_over) && (!paused) && (program_time-picture_t > PICTURE_TIMEOUT)))
         {	// Any key or timeout
             picture_state++;
@@ -1542,7 +1667,7 @@ void glut_idle_suspended(void)
 #endif
 
     // If we didn't get out, wait for any key
-    if ((!game_suspended) || read_key_once(last_key_used))
+    if ((!game_suspended) || read_key_once(last_key_used, KEYINPUT_KEYBOARD))
     {
         t_last = mtime();
         glutIdleFunc(restore_idle);
@@ -1747,6 +1872,9 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
 int main (int argc, char *argv[])
 #endif
 {
+    //Fluffy
+    memset(plVelocity, 0, sizeof(plVelocity));
+
 #if defined(DEBUG_ENABLED)
     const char* getopt_str = "hbnvs:";
     const char* usage = "[-h][-b][-n][-v][-s <sprite_id>]";
@@ -1807,8 +1935,8 @@ int main (int argc, char *argv[])
     gl_width = PSP_SCR_WIDTH;
     gl_height = PSP_SCR_HEIGHT;
 #else
-    gl_width = (opt_halfsize?1:2)*PSP_SCR_WIDTH;
-    gl_height = (opt_halfsize?1:2)*PSP_SCR_HEIGHT;
+    gl_width = (opt_halfsize?1:2)*PSP_SCR_WIDTH*2;
+    gl_height = (opt_halfsize?1:2)*PSP_SCR_HEIGHT*2;
 #endif
 
 #if defined(__linux__)
@@ -1948,7 +2076,7 @@ int main (int argc, char *argv[])
     glutSpecialUpFunc(glut_special_keys_up);
     glutMouseFunc(glut_mouse_buttons);
 
-    glutJoystickFunc(glut_joystick,30);
+    //glutJoystickFunc(glut_joystick,30);
 
     glutMainLoop();
 

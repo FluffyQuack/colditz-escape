@@ -517,7 +517,7 @@ extern "C" {
 #define STATE_STOOGE_SID		0xF9
 
 // For animations that are NOT guybrushes (guybrushes embed their own animation struct)
-#define MAX_ANIMATIONS			0x20
+#define MAX_ANIMATIONS			0x20 //Fluffy TODO: Do we need to increase this?
 #define MAX_CURRENTLY_ANIMATED	MAX_ANIMATIONS
 #define NB_ANIMATED_SPRITES		23
 #define NB_GUYBRUSHES			(NB_NATIONS + NB_GUARDS)
@@ -609,7 +609,8 @@ typedef struct
 	uint32_t index;	// index for the ani in the LOADER table
 	int32_t  framecount;
 	uint32_t end_of_ani_parameter;
-	void (*end_of_ani_function)(uint32_t);
+    uint32_t end_of_ani_parameter2; //Fluffy
+	void (*end_of_ani_function)(uint32_t, uint32_t);
 } s_animation;
 
 // Timed events
@@ -617,7 +618,8 @@ typedef struct
 {
 	uint64_t expiration_time;
 	uint32_t parameter;
-	void (*function)(uint32_t);
+    uint32_t parameter2; //Fluffy
+	void (*function)(uint32_t, uint32_t);
 } s_event;
 
 // Sound FXs
@@ -653,7 +655,7 @@ typedef struct
 	// Guard activity variables
 	bool			reinstantiate;
 	bool			resume_motion;
-	bool			blocked_by_prisoner;
+	int 			blocked_by_prisoner; //Fluffy: -1 if not blocked, otherwise, index of player
 	uint32_t		go_on;
 	uint32_t		spent_in_room;
 	uint16_t		wait;
@@ -687,6 +689,13 @@ typedef struct
     uint16_t	room_props[NB_OBSBIN];
     uint8_t		over_prop, over_prop_id;
 } s_roomProps;
+
+//Fluffy
+typedef struct
+{
+    int16_t	dx;
+    int16_t d2y;
+} s_player_velocity;
 
 /*
  *	Defines, passing as globals (originally global variables)
@@ -765,6 +774,7 @@ extern char				nb_props_message[32];
 extern uint64_t			game_time, last_atime, last_ptime, last_ctime, t_last;
 extern s_event			events[NB_EVENTS];
 extern bool fourSplitscreen; //Fluffy: Always render 4-player split screen
+extern s_player_velocity plVelocity[NB_NATIONS]; //Fluffy
 
 /*
  *	Prototypes

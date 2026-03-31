@@ -96,23 +96,25 @@ static __inline void set_status_message(void* msg, int priority, uint64_t timeou
 	}
 }
 
-static __inline void consume_prop()
+static __inline void consume_prop(int nationIdx)
 {	// we can use an __inline here because we deal with globals
 	if (!opt_keymaster)
 	{	// consume the prop
-		props[current_nation][selected_prop[current_nation]]--;
-		if (props[current_nation][selected_prop[current_nation]] == 0)
+		props[nationIdx][selected_prop[nationIdx]]--;
+		if (props[nationIdx][selected_prop[nationIdx]] == 0)
 		// display the empty box if last prop
-			selected_prop[current_nation] = 0;
+			selected_prop[nationIdx] = 0;
 	}
 }
 
+//Fluffy TODO
 #define update_props_message(prop_id)												\
 	nb_props_message[1] = (props[current_nation][prop_id] / 10) + 0x30;				\
 	nb_props_message[2] = (props[current_nation][prop_id] % 10) + 0x30;				\
 	strcpy(nb_props_message+6, (char*) fbuffer[LOADER] + readlong(fbuffer[LOADER],	\
 		PROPS_MESSAGE_BASE + 4*(prop_id-1)) + 1);
 
+//Fluffy TODO
 #define show_prop_count()															\
 	update_props_message(selected_prop[current_nation]);							\
 	set_status_message(nb_props_message, 1, PROPS_MESSAGE_TIMEOUT)
@@ -138,13 +140,13 @@ bool load_game(char* load_name);
 void depack_loadtune();
 void set_room_props(int nationIdx);
 void set_sfxs();
-bool move_guards();
+void move_guards();
 void toggle_exit(uint32_t exit_nr);
-int16_t check_footprint(int16_t dx, int16_t d2y);
+int16_t check_footprint(int16_t dx, int16_t d2y, int nationIdx);
 int16_t check_tunnel_io();
 bool check_guard_footprint(uint8_t g, int16_t dx, int16_t d2y);
 void switch_nation(uint8_t new_nation);
-void switch_room(int16_t exit, bool tunnel_io);
+void switch_room(int16_t exit, bool tunnel_io, int nationIdx);
 void fix_files(bool reload);
 void timed_events(uint16_t hours, uint16_t minutes_high, uint16_t minutes_low);
 void check_on_prisoners();

@@ -124,6 +124,7 @@
     <ClCompile Include="..\md5.c" />
     <ClCompile Include="..\soundplayer.c" />
     <ClCompile Include="..\windows\audio_backend.cpp" />
+    <ClCompile Include="..\eckbock-input.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\anti-tampering.h" />
@@ -145,6 +146,7 @@
     <ClInclude Include="..\GL\glew.h" />
     <ClInclude Include="..\GL\wglew.h" />
     <ClInclude Include="..\windows\unistd.h" />
+    <ClInclude Include="..\eckbock-input.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>

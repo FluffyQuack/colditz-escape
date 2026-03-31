@@ -48,6 +48,9 @@
     <ClCompile Include="..\iniparser.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\eckbock-input.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\anti-tampering.h">
@@ -108,6 +111,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\windows\unistd.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\eckbock-input.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
