@@ -1216,15 +1216,18 @@ uint8_t i, sid;
 
     overlay[overlay_index].sid = (opt_sid == -1)?sid:opt_sid;
 
-    // If you uncomment the lines below, you'll get confirmation that our position
-    // computations are right to position our guy to the middle of the screen
-//	overlay[overlay_index].x = gl_off_x + guybrush[PRISONER].px + sprite[sid].x_offset;
+    //Fluffy CenterRoom Feature start
     overlay[overlay_index].y = gl_off_y + guybrush[current_nation].p2y/2 - sprite[sid].h + (in_tunnel?11:5);
-    overlay[overlay_index].x = PSP_SCR_WIDTH/2 + sprite[sid].x_offset - (in_tunnel?24:0);
+    overlay[overlay_index].x = gl_off_x + guybrush[current_nation].px + sprite[sid].x_offset - (in_tunnel?24:0);
 //	overlay[overlay_index].y = PSP_SCR_HEIGHT/2 - NORTHWARD_HO - 32;
 
-    // Our guy's always at the center of our z-buffer
-    overlay[overlay_index].z = 0;
+    // Depth relative to the room overlay z reference (PSP_SCR_HEIGHT/2 - NORTHWARD_HO).
+    // In scrolling mode gl_off_y = PSP_SCR_HEIGHT/2 - p2y/2 - NORTHWARD_HO, so this is 0
+    // (player centered on screen). In non-scrolling mode (small room) this tracks the
+    // player's actual position within the stationary room.
+    overlay[overlay_index].z = gl_off_y + guybrush[current_nation].p2y/2 - (PSP_SCR_HEIGHT/2 - NORTHWARD_HO);
+    //Fluffy CenterRoom Feature end
+
     // Who cares about optimizing for one guy!
     if(!(p_event[current_nation].escaped))
         // Ignore this overlay if our guy is free

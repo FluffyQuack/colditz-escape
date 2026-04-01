@@ -988,13 +988,31 @@ void display_room(int nationIdx)
             4*TUNNEL_MSG_ID), 0, NO_MESSAGE_TIMEOUT);
     }
 
+    //Fluffy CenterRoom Feature start
+    // This sets the room_x, room_y and offset values - must come before overlay
+    // positioning so that the centering adjustment below uses the correct dimensions
+    set_room_xy(guybrush[nationIdx].room);
+
+    // If the room fits entirely in the viewport on an axis, center it on that axis
+    // instead of scrolling. Outside is always larger than the viewport, so only
+    // apply this to inside rooms.
+    if(1) //Set this to 0 to always scroll camera
+    {
+        if(guybrush[nationIdx].room != ROOM_OUTSIDE)
+        {
+            int32_t room_px_w = room_x * 32;
+            int32_t room_px_h = room_y * 16;
+            if (room_px_w <= PSP_SCR_WIDTH)
+                gl_off_x = (PSP_SCR_WIDTH - room_px_w) / 2;
+            if (room_px_h <= PSP_SCR_HEIGHT)
+                gl_off_y = (PSP_SCR_HEIGHT - room_px_h) / 2;
+        }
+    }
 
     // Before we do anything, let's set the pickable objects in
     // our overlay table (so that room overlays go on top of 'em)
     set_props_overlays(nationIdx);
-
-    // This sets the room_x, room_y and offset values
-    set_room_xy(guybrush[nationIdx].room);
+    //Fluffy CenterRoom Feature end
 
     // No readtile() macros used here, for speed
     if (guybrush[nationIdx].room != ROOM_OUTSIDE)
