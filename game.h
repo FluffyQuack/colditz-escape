@@ -159,6 +159,7 @@ void add_guybrushes();
 void sort_overlays(uint8_t a[], uint8_t n);
 void play_cluck();
 void thriller_toggle();
+void process_motion(int nationIdx);
 
 #ifdef	__cplusplus
 }
