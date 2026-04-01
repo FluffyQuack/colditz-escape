@@ -759,6 +759,7 @@ extern s_prisoner_event p_event[NB_NATIONS];
 extern s_roomProps roomProps[NB_NATIONS]; //Fluffy
 extern char				*status_message;
 extern int				status_message_priority;
+extern int				status_message_nation;
 extern const int16_t	directions[3][3], dir_to_dx[9], dir_to_d2y[9], invert_dir[9];
 extern uint8_t			hours_digit_h, hours_digit_l, minutes_digit_h, minutes_digit_l;
 extern uint8_t			palette_index;	// Current palette

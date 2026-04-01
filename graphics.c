@@ -1498,8 +1498,20 @@ void display_panel(int nationIdx)
     // Display the current status message (per-player prop description takes precedence)
     if (roomProps[nationIdx].over_prop_id)
         display_message(roomProps[nationIdx].over_prop_msg);
-    else
+    else if (status_message_nation < 0 || status_message_nation == nationIdx)
         display_message(status_message);
+    else
+    {	// Status message belongs to a different player; show this player's room description
+        char* room_desc;
+        if (guybrush[nationIdx].room == ROOM_OUTSIDE)
+            room_desc = fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE + 4*COURTYARD_MSG_ID);
+        else if (guybrush[nationIdx].room < ROOM_TUNNEL)
+            room_desc = fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE +
+                4*(readbyte(fbuffer[LOADER], ROOM_DESC_BASE + guybrush[nationIdx].room)));
+        else
+            room_desc = fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE + 4*TUNNEL_MSG_ID);
+        display_message(room_desc);
+    }
 }
 
 //Fluffy

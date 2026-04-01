@@ -93,6 +93,7 @@ static __inline void set_status_message(void* msg, int priority, uint64_t timeou
 		t_status_message_timeout = game_time + timeout_duration;
 		status_message = (char*)(msg);
 		status_message_priority = priority;
+		status_message_nation = -1;
 	}
 }
 
@@ -115,7 +116,8 @@ static __inline void consume_prop(int nationIdx)
 
 #define show_prop_count(nation_idx)													\
 	update_props_message(nation_idx, selected_prop[nation_idx]);					\
-	set_status_message(nb_props_message, 1, PROPS_MESSAGE_TIMEOUT)
+	set_status_message(nb_props_message, 1, PROPS_MESSAGE_TIMEOUT);				\
+	status_message_nation = (nation_idx)
 
 
 /*

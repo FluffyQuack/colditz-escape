@@ -238,6 +238,7 @@ uint64_t	t_last, t_status_message_timeout, transition_start;
 uint64_t	picture_t;
 char*		status_message;
 int			status_message_priority;
+int			status_message_nation = -1;	// -1 = show for all players, 0..3 = specific player only
 s_event		events[NB_EVENTS];
 s_prisoner_event p_event[NB_NATIONS];
 uint8_t		props[NB_NATIONS][NB_PROPS];
