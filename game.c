@@ -21,6 +21,10 @@
  *  ---------------------------------------------------------------------------
  */
 
+//Fluffy TODO: Make it possible to swap controller mappings with F1-F4 for controller 1. Ie, press F2, and the controller 1 controls player 2
+//Fluffy TODO: Make it possible to customize which controller is controlling which player. Maybe make it so that one controller is mapped to two nations, and they can press Start to switch betweeen them?
+//Fluffy TODO: I think there is a bug where other players can't control their player anymore once a player is dead
+//Fluffy TODO: Is there also a similar bug as the one above if one player escapes? Try turning off AI and have one player run out of the castle
 
 #include <stdio.h>
 #include <stdlib.h>
