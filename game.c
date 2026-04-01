@@ -2294,7 +2294,7 @@ int16_t check_footprint(int16_t dx, int16_t d2y, int nationIdx)
                 {	// Override the message
                     exit_nr = (uint8_t) ((guybrush[nationIdx].room==ROOM_OUTSIDE)?comp_readexit(tile_x+exit_dx[0],tile_y-2):room_readexit(tile_x+exit_dx[0],tile_y-2))& 0x1F;
                     sprintf(debug_message, "EXIT #%d (GRADE %d)", exit_nr & ((guybrush[nationIdx].room!=ROOM_OUTSIDE)?0x0F:0xFF), ((exit_flags & 0x60) >> 5) - 1);
-                    set_status_message(debug_message, 3, 3000); //NO_MESSAGE_TIMEOUT);
+                    set_status_message(nationIdx, debug_message, 3, 3000); //NO_MESSAGE_TIMEOUT);
                 }
 
                 // Is the exit open?
@@ -2346,7 +2346,7 @@ int16_t check_footprint(int16_t dx, int16_t d2y, int nationIdx)
                     else
                     {
                         // Display the key grade message
-                        set_status_message(fbuffer[LOADER] + readlong(fbuffer[LOADER], EXIT_MESSAGE_BASE +
+                        set_status_message(nationIdx, fbuffer[LOADER] + readlong(fbuffer[LOADER], EXIT_MESSAGE_BASE +
                             ((exit_flags & 0x60) >> 3)), 2, NO_MESSAGE_TIMEOUT);
                         // Return failure if we can't exit
                         return 0;
@@ -2567,8 +2567,8 @@ void switch_nation(uint8_t new_nation)
     // Clear the stooge flag for the new nation
     prisoner_state &= ~(STATE_MOTION|STATE_ANIMATED|STATE_STOOGING);
     prisoner_reset_ani = true;
-    t_status_message_timeout = 0;
-    status_message_priority = 0;
+    t_status_message_timeout[current_nation] = 0;
+    status_message_priority[current_nation] = 0;
     set_room_props(current_nation);
 }
 

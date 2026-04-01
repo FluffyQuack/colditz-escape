@@ -757,9 +757,8 @@ extern uint8_t			props[NB_NATIONS][NB_PROPS];
 extern uint8_t			selected_prop[NB_NATIONS];
 extern s_prisoner_event p_event[NB_NATIONS];
 extern s_roomProps roomProps[NB_NATIONS]; //Fluffy
-extern char				*status_message;
-extern int				status_message_priority;
-extern int				status_message_nation;
+extern char				*status_message[NB_NATIONS];
+extern int				status_message_priority[NB_NATIONS];
 extern const int16_t	directions[3][3], dir_to_dx[9], dir_to_d2y[9], invert_dir[9];
 extern uint8_t			hours_digit_h, hours_digit_l, minutes_digit_h, minutes_digit_l;
 extern uint8_t			palette_index;	// Current palette
@@ -772,7 +771,7 @@ extern uint32_t			fsize[NB_FILES];
 extern char				*mod_name[NB_MODS];
 extern int				gl_width, gl_height;
 extern uint8_t			current_nation;
-extern char				nb_props_message[32];
+extern char				nb_props_message[NB_NATIONS][32];
 extern uint64_t			game_time, last_atime, last_ptime, last_ctime, t_last;
 extern s_event			events[NB_EVENTS];
 extern bool fourSplitscreen; //Fluffy: Always render 4-player split screen

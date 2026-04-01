@@ -974,17 +974,17 @@ void display_room(int nationIdx)
     // overlay call, if we want a props message override
     if (guybrush[nationIdx].room == ROOM_OUTSIDE)
     {	// Outside
-        set_status_message(fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE +
+        set_status_message(nationIdx, fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE +
             4*COURTYARD_MSG_ID), 0, NO_MESSAGE_TIMEOUT);
     }
     else if (guybrush[nationIdx].room < ROOM_TUNNEL)
     {	// Standard room
-        set_status_message(fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE +
+        set_status_message(nationIdx, fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE +
             4*(readbyte(fbuffer[LOADER], ROOM_DESC_BASE	+ guybrush[nationIdx].room))), 0, NO_MESSAGE_TIMEOUT);
     }
     else
     {	// Tunnel
-        set_status_message(fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE +
+        set_status_message(nationIdx, fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE +
             4*TUNNEL_MSG_ID), 0, NO_MESSAGE_TIMEOUT);
     }
 
@@ -1498,20 +1498,8 @@ void display_panel(int nationIdx)
     // Display the current status message (per-player prop description takes precedence)
     if (roomProps[nationIdx].over_prop_id)
         display_message(roomProps[nationIdx].over_prop_msg);
-    else if (status_message_nation < 0 || status_message_nation == nationIdx)
-        display_message(status_message);
     else
-    {	// Status message belongs to a different player; show this player's room description
-        char* room_desc;
-        if (guybrush[nationIdx].room == ROOM_OUTSIDE)
-            room_desc = fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE + 4*COURTYARD_MSG_ID);
-        else if (guybrush[nationIdx].room < ROOM_TUNNEL)
-            room_desc = fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE +
-                4*(readbyte(fbuffer[LOADER], ROOM_DESC_BASE + guybrush[nationIdx].room)));
-        else
-            room_desc = fbuffer[LOADER] + readlong(fbuffer[LOADER], MESSAGE_BASE + 4*TUNNEL_MSG_ID);
-        display_message(room_desc);
-    }
+        display_message(status_message[nationIdx]);
 }
 
 //Fluffy
@@ -1792,8 +1780,8 @@ void create_pause_screen()
         current_nation = i;
         prisoner_state &= ~(STATE_MOTION|STATE_ANIMATED);
         prisoner_reset_ani = true;
-        t_status_message_timeout = 0;
-        status_message_priority = 0;
+        t_status_message_timeout[i] = 0;
+        status_message_priority[i] = 0;
         glClear(GL_COLOR_BUFFER_BIT);
         display_room(i);
         // Copy the section of interest into one of our four paused textures

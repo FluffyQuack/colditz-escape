@@ -234,17 +234,17 @@ s_cheat_sequence cheat_sequence[] = {
 
 bool		found;
 uint64_t	game_time, program_time, last_atime, last_ptime, last_ctime;
-uint64_t	t_last, t_status_message_timeout, transition_start;
+uint64_t	t_last, transition_start;
+uint64_t	t_status_message_timeout[NB_NATIONS];
 uint64_t	picture_t;
-char*		status_message;
-int			status_message_priority;
-int			status_message_nation = -1;	// -1 = show for all players, 0..3 = specific player only
+char*		status_message[NB_NATIONS];
+int			status_message_priority[NB_NATIONS];
 s_event		events[NB_EVENTS];
 s_prisoner_event p_event[NB_NATIONS];
 uint8_t		props[NB_NATIONS][NB_PROPS];
 uint8_t		selected_prop[NB_NATIONS];
 s_roomProps roomProps[NB_NATIONS]; //Fluffy: Array with room prop information for every player
-char		nb_props_message[32] = "\499 * ";
+char		nb_props_message[NB_NATIONS][32] = {"\499 * ", "\499 * ", "\499 * ", "\499 * "};
 uint8_t		current_nation = 0;
 uint16_t	game_state;
 uint8_t		hours_digit_h, hours_digit_l, minutes_digit_h, minutes_digit_l;
@@ -764,20 +764,20 @@ void user_input()
                     switch(i)
                     {
                     case CHEAT_KONAMI:
-                        set_status_message("     NICE TRY... BUT NO     ", 3, CHEAT_MESSAGE_TIMEOUT);
+                        set_status_message(current_nation, "     NICE TRY... BUT NO     ", 3, CHEAT_MESSAGE_TIMEOUT);
                         break;
                     case CHEAT_PROP_BONANZA:
                         for (j=1; j<NB_PROPS-1; j++)
                             props[current_nation][j] += 10;
-                        set_status_message("    ENJOY YOUR PROPS ;)     ", 3, CHEAT_MESSAGE_TIMEOUT);
+                        set_status_message(current_nation, "    ENJOY YOUR PROPS ;)     ", 3, CHEAT_MESSAGE_TIMEOUT);
                         break;
                     case NO_CAKE_FOR_YOU:
-                        set_status_message("  NO: >YOU< ARE THE LIE!!!  ", 3, CHEAT_MESSAGE_TIMEOUT);
+                        set_status_message(current_nation, "  NO: >YOU< ARE THE LIE!!!  ", 3, CHEAT_MESSAGE_TIMEOUT);
                         break;
                     case NAMIKO:
                     case THRILLERDANCE:
                         if (!opt_thrillerdance)
-                            set_status_message("  'COZ THIS IS THRILLER!... ", 3, CHEAT_MESSAGE_TIMEOUT);
+                            set_status_message(current_nation, "  'COZ THIS IS THRILLER!... ", 3, CHEAT_MESSAGE_TIMEOUT);
                         opt_thrillerdance = !opt_thrillerdance;
                         thriller_toggle();
                         break;
@@ -1184,8 +1184,9 @@ static void glut_idle_game(void)
         }
 
         // Take care of message display
-        if (game_time > t_status_message_timeout)
-            status_message_priority = 0;
+        for (i = 0; i < NB_NATIONS; i++)
+            if (game_time > t_status_message_timeout[i])
+                status_message_priority[i] = 0;
     }
 
     // This ensures that all the motions are in sync

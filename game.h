@@ -85,16 +85,21 @@ extern "C" {
 
 
 // A few definitions to make prop handling and status messages more readable
-extern uint64_t t_status_message_timeout;
-static __inline void set_status_message(void* msg, int priority, uint64_t timeout_duration)
+extern uint64_t t_status_message_timeout[NB_NATIONS];
+static __inline void set_status_message(int nation, void* msg, int priority, uint64_t timeout_duration)
 {
-	if (priority >= status_message_priority)
-	{
-		t_status_message_timeout = game_time + timeout_duration;
-		status_message = (char*)(msg);
-		status_message_priority = priority;
-		status_message_nation = -1;
-	}
+    int from = 0, to = 3; //Default to assigning message to all nations
+    if(nation >= 0 && nation < 4) from = to = nation; //Assign message to one nation
+
+    for(int i = from; i <= to; i++)
+    {
+	    if (priority >= status_message_priority[i])
+	    {
+		    t_status_message_timeout[i] = game_time + timeout_duration;
+		    status_message[i] = (char*)(msg);
+		    status_message_priority[i] = priority;
+	    }
+    }
 }
 
 static __inline void consume_prop(int nationIdx)
@@ -109,15 +114,14 @@ static __inline void consume_prop(int nationIdx)
 }
 
 #define update_props_message(nation_idx, prop_id)									\
-	nb_props_message[1] = (props[nation_idx][prop_id] / 10) + 0x30;				\
-	nb_props_message[2] = (props[nation_idx][prop_id] % 10) + 0x30;				\
-	strcpy(nb_props_message+6, (char*) fbuffer[LOADER] + readlong(fbuffer[LOADER],	\
+	nb_props_message[nation_idx][1] = (props[nation_idx][prop_id] / 10) + 0x30;	\
+	nb_props_message[nation_idx][2] = (props[nation_idx][prop_id] % 10) + 0x30;	\
+	strcpy(nb_props_message[nation_idx]+6, (char*) fbuffer[LOADER] + readlong(fbuffer[LOADER],	\
 		PROPS_MESSAGE_BASE + 4*(prop_id-1)) + 1);
 
 #define show_prop_count(nation_idx)													\
 	update_props_message(nation_idx, selected_prop[nation_idx]);					\
-	set_status_message(nb_props_message, 1, PROPS_MESSAGE_TIMEOUT);				\
-	status_message_nation = (nation_idx)
+	set_status_message(nation_idx, nb_props_message[nation_idx], 1, PROPS_MESSAGE_TIMEOUT)
 
 
 /*
