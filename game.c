@@ -2429,7 +2429,7 @@ int16_t check_tunnel_io(int nationIdx)
                             play_sfx(SFX_WTF);
 
                         consume_prop(nationIdx);		// doesn't consume if opt_keymaster
-                        show_prop_count();
+                        show_prop_count(nationIdx);
                         // We offset exits by 0x100 for toggle_exit to know it's a tunnel
                         toggle_exit(exit_nr-1 + 0x100, nationIdx);
 
@@ -2448,7 +2448,7 @@ int16_t check_tunnel_io(int nationIdx)
                     {
                         // Only consume the candle (because of the if !opt_keymaster in fn)
                         consume_prop(nationIdx);
-                        show_prop_count();
+                        show_prop_count(nationIdx);
                     }
                     return exit_nr;
                 }
@@ -2775,7 +2775,7 @@ void require_pass(uint32_t p)
         guy(p).state &= ~STATE_IN_PURSUIT;
 //		selected_prop[p] = ITEM_PASS;		// Doing this is bothersome if
         props[p][ITEM_PASS]--;				// we have to re-cycle in a hurry
-//		show_prop_count();					// => let's comment these lines out
+//		show_prop_count(nationIdx);					// => let's comment these lines out
 
         // Reset all the guards that were in pursuit
         if (opt_enhanced_guards)

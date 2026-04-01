@@ -107,16 +107,14 @@ static __inline void consume_prop(int nationIdx)
 	}
 }
 
-//Fluffy TODO
-#define update_props_message(prop_id)												\
-	nb_props_message[1] = (props[current_nation][prop_id] / 10) + 0x30;				\
-	nb_props_message[2] = (props[current_nation][prop_id] % 10) + 0x30;				\
+#define update_props_message(nation_idx, prop_id)									\
+	nb_props_message[1] = (props[nation_idx][prop_id] / 10) + 0x30;				\
+	nb_props_message[2] = (props[nation_idx][prop_id] % 10) + 0x30;				\
 	strcpy(nb_props_message+6, (char*) fbuffer[LOADER] + readlong(fbuffer[LOADER],	\
 		PROPS_MESSAGE_BASE + 4*(prop_id-1)) + 1);
 
-//Fluffy TODO
-#define show_prop_count()															\
-	update_props_message(selected_prop[current_nation]);							\
+#define show_prop_count(nation_idx)													\
+	update_props_message(nation_idx, selected_prop[nation_idx]);					\
 	set_status_message(nb_props_message, 1, PROPS_MESSAGE_TIMEOUT)
 
 

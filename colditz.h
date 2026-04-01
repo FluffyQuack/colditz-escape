@@ -688,6 +688,7 @@ typedef struct
     uint8_t		nb_room_props;
     uint16_t	room_props[NB_OBSBIN];
     uint8_t		over_prop, over_prop_id;
+    char*		over_prop_msg;
 } s_roomProps;
 
 //Fluffy

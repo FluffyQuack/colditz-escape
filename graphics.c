@@ -1495,8 +1495,11 @@ void display_panel(int nationIdx)
     display_sprite(PANEL_STATE_X, PANEL_TOP_Y,
         sprite[sid].w, sprite[sid].h, sprite_texid[sid]);
 
-    // Display the current status message
-    display_message(status_message);
+    // Display the current status message (per-player prop description takes precedence)
+    if (roomProps[nationIdx].over_prop_id)
+        display_message(roomProps[nationIdx].over_prop_msg);
+    else
+        display_message(status_message);
 }
 
 //Fluffy

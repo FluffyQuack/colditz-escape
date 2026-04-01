@@ -914,7 +914,7 @@ void user_input()
                     {
                         guybrush[i].is_dressed_as_guard = (cur_prop == ITEM_GUARDS_UNIFORM);
                         consume_prop(i);
-                        show_prop_count();
+                        show_prop_count(i);
                         // Set the animation for changing into guard's clothes
                         prisoner_state |= STATE_ANIMATED+STATE_KNEELING;
                         guybrush[i].animation.end_of_ani_parameter = (current_nation & 0xFF) |
@@ -930,7 +930,7 @@ void user_input()
                     break;
                 case ITEM_STONE:
                     consume_prop(i);
-                    show_prop_count();
+                    show_prop_count(i);
                     p_event[i].thrown_stone = true;
                     break;
                 default:
@@ -963,8 +963,7 @@ void user_input()
                 {
                     selected_prop[i] = prop_id;
                     // Display our props count
-                    update_props_message(prop_id);
-                    show_prop_count();
+                    show_prop_count(i);
                 }
                 else
                     selected_prop[i] = 0;
@@ -995,7 +994,7 @@ void user_input()
                         writeword(fbuffer[OBJECTS],prop_offset,ROOM_NO_PROP);
                         props[i][roomProps[i].over_prop_id]++;
                         selected_prop[i] = roomProps[i].over_prop_id;
-                        show_prop_count();
+                        show_prop_count(i);
                     }
                 }
                 else
@@ -1250,9 +1249,8 @@ static void glut_idle_game(void)
             {
                 roomProps[i].over_prop = u+1;	// 1 indexed
                 roomProps[i].over_prop_id = readbyte(fbuffer[OBJECTS],prop_offset+7);
-                // The props message takes precedence
-                set_status_message(fbuffer[LOADER] + readlong(fbuffer[LOADER],
-                    PROPS_MESSAGE_BASE + 4*(roomProps[i].over_prop_id-1)), 1, PROPS_MESSAGE_TIMEOUT);
+                roomProps[i].over_prop_msg = (char*) fbuffer[LOADER] + readlong(fbuffer[LOADER],
+                    PROPS_MESSAGE_BASE + 4*(roomProps[i].over_prop_id-1));
     //			printb("over_prop = %x, over_prop_id = %x\n", over_prop, over_prop_id);
             }
         }
