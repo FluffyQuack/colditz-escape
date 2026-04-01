@@ -25,6 +25,7 @@
 //Fluffy TODO: Make it possible to customize which controller is controlling which player. Maybe make it so that one controller is mapped to two nations, and they can press Start to switch betweeen them?
 //Fluffy TODO: I think there is a bug where other players can't control their player anymore once a player is dead
 //Fluffy TODO: Is there also a similar bug as the one above if one player escapes? Try turning off AI and have one player run out of the castle
+//Fluffy TODO: We need to do something with the onslaught of footsteps sounds. At the very least: prevent more than one footstep sound from being played per tick.
 
 #include <stdio.h>
 #include <stdlib.h>
