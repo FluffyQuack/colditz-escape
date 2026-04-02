@@ -24,6 +24,8 @@
 //Fluffy TODO: Make it possible to customize which controller is controlling which player. Maybe make it so that one controller is mapped to two nations, and they can press Start to switch betweeen them?
 //Fluffy TODO: Should we do more to reduce the onslaught of footstep sounds? We already made it so the game doesn't play the same sound twice during a frame.
 //Fluffy TODO: If you start a game, pick up something, then get game over, and then restart, then I think inventory might be wonky
+//Fluffy TODO: If fourSplitscreen is false, then we should make sure it's fully playable in that view since our code is doing a bunch of stuff very differently now. For instance, are we still allowing input for other players?
+//Fluffy TODO: Add input toggle for fourSplitscreen
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1790,16 +1792,17 @@ void move_guards()
             if ( (guard(i).room == guy(p).room) && guard_close_by(i, guy(p).px, guy(p).p2y) )
             {
                 //Fluffy: Stooge system doesn't make sense in 4-player screen mode
-                /*
-                // Handle stooge
-                if (guy(p).state & STATE_STOOGING)
-                {	// Stooge tripwire => set our stooge as the active guy
-                    guy(p).state ^= STATE_STOOGING;
-                    if (p != current_nation)
-                        switch_nation(p);
-                    return 0;
+                if(fourSplitscreen == 0)
+                {
+                    // Handle stooge
+                    if (guy(p).state & STATE_STOOGING)
+                    {	// Stooge tripwire => set our stooge as the active guy
+                        guy(p).state ^= STATE_STOOGING;
+                        if (p != current_nation)
+                            switch_nation(p);
+                        return 0;
+                    }
                 }
-                */
 
                 // For clarity purposes
                 do_i_know_you = opt_enhanced_guards && guy(p).is_dressed_as_guard &&

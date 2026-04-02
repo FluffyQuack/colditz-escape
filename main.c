@@ -735,54 +735,57 @@ void user_input()
     for (i=0; i<(NB_NATIONS+2); i++)
         if (read_key_once(key_nation[i], KEYINPUT_KEYBOARD))
         {
-            //Fluffy: We are handling nation switching differently since we always have a 4-player view. Old code below
-            /*
-            // Unpause the game if required
-            if (game_state & GAME_STATE_PAUSED)
-                game_state ^= GAME_STATE_PAUSED|GAME_STATE_ACTION;
-
-            if (i<NB_NATIONS)
-                switch_nation(i);
-            else
-                // we want to have +/-1, without going negative, and we
-                // know that we are either at NB_NATIONS or NB_NATIONS+1
-                // so the formula writes itself as:
-                switch_nation((current_nation+(2*i)-1) % NB_NATIONS);
-            break;
-            */
-
-            //Fluffy: New cool code for cool people
-            //Figure out which nation is controller 1
-            int nationPlr1 = -1;
-            for(int nationIdx = 0; nationIdx < NB_NATIONS; nationIdx++)
+            //Fluffy: We handle nation switching differently depending on view type
+            if(fourSplitscreen == 0)
             {
-                if(playerControllers[nationIdx] == KEYINPUT_XINPUT1)
+                // Unpause the game if required
+                if (game_state & GAME_STATE_PAUSED)
+                    game_state ^= GAME_STATE_PAUSED|GAME_STATE_ACTION;
+
+                if (i<NB_NATIONS)
+                    switch_nation(i);
+                else
+                    // we want to have +/-1, without going negative, and we
+                    // know that we are either at NB_NATIONS or NB_NATIONS+1
+                    // so the formula writes itself as:
+                    switch_nation((current_nation+(2*i)-1) % NB_NATIONS);
+                break;
+            }
+            else
+            {
+                //Figure out which nation is controller 1
+                int nationPlr1 = -1;
+                for(int nationIdx = 0; nationIdx < NB_NATIONS; nationIdx++)
                 {
-                    nationPlr1 = nationIdx;
-                    break;
+                    if(playerControllers[nationIdx] == KEYINPUT_XINPUT1)
+                    {
+                        nationPlr1 = nationIdx;
+                        break;
+                    }
                 }
+
+                //Which nation are we swapping with?
+                int switchToNation = -1;
+                if(i < NB_NATIONS) switchToNation = i;
+                else
+                {
+                    //Cycle
+                    if(i == 4) switchToNation++;
+                    else switchToNation--;
+
+                    //Wrap check
+                    if(switchToNation < 0) switchToNation = 3;
+                    else if(switchToNation > 3) switchToNation = 0;
+                }
+
+                //Error check
+                if(nationPlr1 < 0 || nationPlr1 > 3) continue;
+
+                //Swap
+                int prevController = playerControllers[nationPlr1];
+                playerControllers[nationPlr1] = playerControllers[switchToNation];
+                playerControllers[switchToNation] = prevController;
             }
-
-            //Which nation are we swapping with?
-            int switchToNation = -1;
-            if(i < NB_NATIONS) switchToNation = i;
-            else
-            {
-                //Cycle
-                if(i == 4) switchToNation++;
-                else switchToNation--;
-
-                //Wrap check
-                if(switchToNation < 0) switchToNation = 3;
-                else if(switchToNation > 3) switchToNation = 0;
-            }
-
-            //Error check
-            if(nationPlr1 < 0 || nationPlr1 > 3) continue;
-
-            int prevController = playerControllers[nationPlr1];
-            playerControllers[nationPlr1] = playerControllers[switchToNation];
-            playerControllers[switchToNation] = prevController;
         }
 
 #if defined (CHEATMODE_ENABLED)
@@ -902,11 +905,12 @@ void user_input()
         }
 
         //Fluffy: We're disabling stooge system as it makes no sense to have active when you can see all 4 nations at the same time
-        /*
-        // Toggle stooge
-        if (read_key_once(KEY_STOOGE, keyInputIdx))
-            guybrush[i].state ^= STATE_STOOGING;
-        */
+        if(fourSplitscreen == 0)
+        {
+            // Toggle stooge
+            if (read_key_once(KEY_STOOGE, keyInputIdx))
+                guybrush[i].state ^= STATE_STOOGING;
+        }
 
         // Even if we're idle, we might be trying to open a tunnel exit, or use a prop
         if (read_key_once(KEY_ACTION, keyInputIdx))
