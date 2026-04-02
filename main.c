@@ -877,7 +877,7 @@ void user_input()
 
         // Above are all the keys allowed if the prisoner has not already escaped or died, thus...
         if (p_event[i].escaped || (guybrush[i].state & STATE_SHOT))
-            return;
+            continue;
 
         // Walk/Run toggle
         if (read_key_once(KEY_TOGGLE_WALK_RUN, keyInputIdx) && (!(guybrush[i].state & STATE_TUNNELING)) &&
