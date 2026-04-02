@@ -639,6 +639,8 @@ static void AssignXinputControllerInput_Held(unsigned int keyInputIdx, unsigned 
         key_input[keyInputIdx].key_down[keyIdx] = false;
 }
 
+int playerControllers[4] = {KEYINPUT_XINPUT1, KEYINPUT_XINPUT2, KEYINPUT_XINPUT3, KEYINPUT_XINPUT4};
+
 // Act on user input (keys, joystick)
 void user_input()
 {
@@ -735,6 +737,8 @@ void user_input()
     for (i=0; i<(NB_NATIONS+2); i++)
         if (read_key_once(key_nation[i], KEYINPUT_KEYBOARD))
         {
+            //Fluffy: We are handling nation switching differently since we always have a 4-player view. Old code below
+            /*
             // Unpause the game if required
             if (game_state & GAME_STATE_PAUSED)
                 game_state ^= GAME_STATE_PAUSED|GAME_STATE_ACTION;
@@ -747,6 +751,40 @@ void user_input()
                 // so the formula writes itself as:
                 switch_nation((current_nation+(2*i)-1) % NB_NATIONS);
             break;
+            */
+
+            //Fluffy: New cool code for cool people
+            //Figure out which nation is controller 1
+            int nationPlr1 = -1;
+            for(int nationIdx = 0; nationIdx < NB_NATIONS; nationIdx++)
+            {
+                if(playerControllers[nationIdx] == KEYINPUT_XINPUT1)
+                {
+                    nationPlr1 = nationIdx;
+                    break;
+                }
+            }
+
+            //Which nation are we swapping with?
+            int switchToNation = -1;
+            if(i < NB_NATIONS) switchToNation = i;
+            else
+            {
+                //Cycle
+                if(i == 4) switchToNation++;
+                else switchToNation--;
+
+                //Wrap check
+                if(switchToNation < 0) switchToNation = 3;
+                else if(switchToNation > 3) switchToNation = 0;
+            }
+
+            //Error check
+            if(nationPlr1 < 0 || nationPlr1 > 3) continue;
+
+            int prevController = playerControllers[nationPlr1];
+            playerControllers[nationPlr1] = playerControllers[switchToNation];
+            playerControllers[switchToNation] = prevController;
         }
 
 #if defined (CHEATMODE_ENABLED)
@@ -837,11 +875,7 @@ void user_input()
 
     for(int i = 0; i < NB_NATIONS; i++)
     {
-        int keyInputIdx = 0;
-        if(i == 0) keyInputIdx = KEYINPUT_XINPUT1;
-        else if(i == 1) keyInputIdx = KEYINPUT_XINPUT2;
-        else if(i == 2) keyInputIdx = KEYINPUT_XINPUT3;
-        else if(i == 3) keyInputIdx = KEYINPUT_XINPUT4;
+        int keyInputIdx = playerControllers[i];
 
         // Above are all the keys allowed if the prisoner has not already escaped or died, thus...
         if (p_event[i].escaped || (guybrush[i].state & STATE_SHOT))
