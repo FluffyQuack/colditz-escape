@@ -161,7 +161,6 @@ typedef struct {
 #define KEYINPUT_NUM 6
 s_key_input key_input[KEYINPUT_NUM]; // Keyboard + 4 xinputs + glut joystick
 
-bool	key_down[256], key_readonce[256];
 static	__inline bool read_key_once(uint8_t k, int keyInputIdx)
 {
     if (key_input[keyInputIdx].key_down[k])
@@ -178,7 +177,6 @@ static	__inline bool read_key_once(uint8_t k, int keyInputIdx)
 #if defined (CHEATMODE_ENABLED)
 // We don't want to pollute the key_readonce table for cheat keys, yet
 // we need to check if the cheat keys have been pressed once
-bool key_cheat_readonce[256];
 uint8_t last_key_used = 0;
 static __inline bool read_cheat_key_once(uint8_t k, int keyInputIdx)
 {
@@ -989,7 +987,7 @@ void user_input()
                  (read_key_once(KEY_INVENTORY_RIGHT, keyInputIdx)) )
             {
                 prop_id = selected_prop[i];
-                direction = key_down[KEY_INVENTORY_LEFT]?0x0F:1;
+                direction = key_input[KEYINPUT_KEYBOARD].key_down[KEY_INVENTORY_LEFT]?0x0F:1;
                 do
                     prop_id = (prop_id + direction) & 0x0F;
                 while ( (!props[i][prop_id]) && (prop_id != selected_prop[i]) );
@@ -1301,7 +1299,7 @@ static void glut_idle_game(void)
 #define ROTATE_OPTION(section, option, nb_values) {                             \
     char val_str[2] = { '0', 0 };                                               \
     int val = iniparser_getint(config, #section ":" #option, 2);                \
-    val= (val+(key_down[SPECIAL_KEY_LEFT]?(nb_values)-1:1))%(nb_values);        \
+    val= (val+(key_input[KEYINPUT_KEYBOARD].key_down[SPECIAL_KEY_LEFT]?(nb_values)-1:1))%(nb_values);        \
     val_str[0] = '0'+val; iniparser_set(config, #section ":" #option, val_str); \
     config_save = true; }
 
@@ -1759,14 +1757,14 @@ void static_screen(uint8_t picture_id, void (*func)(uint32_t), uint32_t param)
 #define ASSIGN_X360(key, button)                                    \
     if ((buttonMask & button) && !(last_buttonMask & button))       \
     {                                                               \
-        key_down[key] = true;                                       \
+        key_input[KEYINPUT_KEYBOARD].key_down[key] = true;                                       \
         last_key_used = key;                                        \
     }                                                               \
     else if (!(buttonMask & button) && (last_buttonMask & button))  \
     {                                                               \
-        key_down[key] = false;                                      \
-        key_readonce[key] = false;                                  \
-        key_cheat_readonce[key] = false;                            \
+        key_input[KEYINPUT_KEYBOARD].key_down[key] = false;                                      \
+        key_input[KEYINPUT_KEYBOARD].key_readonce[key] = false;                                  \
+        key_input[KEYINPUT_KEYBOARD].key_cheat_readonce[key] = false;                            \
     }
 
 static void parse_xbox360_controller(unsigned int buttonMask)
@@ -1829,7 +1827,7 @@ static void glut_joystick(unsigned int buttonMask, int x, int y, int z)
 // Only relevant for platforms with actual keyboard
 #if !defined(PSP)
 #define KEY_MOD(mod)													\
-    key_down[SPECIAL_KEY_##mod] = (glut_mod & GLUT_ACTIVE_##mod) != 0
+    key_input[KEYINPUT_KEYBOARD].key_down[SPECIAL_KEY_##mod] = (glut_mod & GLUT_ACTIVE_##mod) != 0
 #define SET_MODS { glut_mod = glutGetModifiers();						\
     KEY_MOD(SHIFT); KEY_MOD(CTRL); KEY_MOD(ALT); }
 #else
@@ -1838,17 +1836,17 @@ static void glut_joystick(unsigned int buttonMask, int x, int y, int z)
 
 static void glut_keyboard(uint8_t key, int x, int y)
 {
-    key_down[key] = true;
+    key_input[KEYINPUT_KEYBOARD].key_down[key] = true;
     last_key_used = key;
     SET_MODS;
 }
 
 static void glut_keyboard_up(uint8_t key, int x, int y)
 {
-    key_down[key] = false;
-    key_readonce[key] = false;
+    key_input[KEYINPUT_KEYBOARD].key_down[key] = false;
+    key_input[KEYINPUT_KEYBOARD].key_readonce[key] = false;
 #if defined (CHEATMODE_ENABLED)
-    key_cheat_readonce[key] = false;
+    key_input[KEYINPUT_KEYBOARD].key_cheat_readonce[key] = false;
 #endif
     SET_MODS;
 }
@@ -1857,8 +1855,8 @@ static void glut_special_keys(int key, int x, int y)
 {
     int converted_key;
     converted_key = (key < GLUT_KEY_LEFT)?key-GLUT_KEY_F1+SPECIAL_KEY_OFFSET1:key-GLUT_KEY_LEFT+SPECIAL_KEY_OFFSET2;
-    key_down[converted_key] = true;
-    last_key_used = converted_key;
+    key_input[KEYINPUT_KEYBOARD].key_down[converted_key] = true;
+    key_input[KEYINPUT_KEYBOARD].last_key_used = converted_key;
     SET_MODS;
 }
 
@@ -1866,10 +1864,10 @@ static void glut_special_keys_up(int key, int x, int y)
 {
     int converted_key;
     converted_key = (key < GLUT_KEY_LEFT)?key-GLUT_KEY_F1+SPECIAL_KEY_OFFSET1:key-GLUT_KEY_LEFT+SPECIAL_KEY_OFFSET2;
-    key_down[converted_key] = false;
-    key_readonce[converted_key] = false;
+    key_input[KEYINPUT_KEYBOARD].key_down[converted_key] = false;
+    key_input[KEYINPUT_KEYBOARD].key_readonce[converted_key] = false;
 #if defined (CHEATMODE_ENABLED)
-    key_cheat_readonce[converted_key] = false;
+    key_input[KEYINPUT_KEYBOARD].key_cheat_readonce[converted_key] = false;
 #endif
     SET_MODS;
 }
@@ -1880,15 +1878,15 @@ static void glut_mouse_buttons(int button, int state, int x, int y)
     converted_key = SPECIAL_MOUSE_BUTTON_BASE + button - GLUT_LEFT_BUTTON;
     if (state == GLUT_DOWN)
     {
-        key_down[converted_key] = true;
+        key_input[KEYINPUT_KEYBOARD].key_down[converted_key] = true;
         last_key_used = converted_key;
     }
     else
     {
-        key_down[converted_key] = false;
-        key_readonce[converted_key] = false;
+        key_input[KEYINPUT_KEYBOARD].key_down[converted_key] = false;
+        key_input[KEYINPUT_KEYBOARD].key_readonce[converted_key] = false;
 #if defined (CHEATMODE_ENABLED)
-        key_cheat_readonce[converted_key] = false;
+        key_input[KEYINPUT_KEYBOARD].key_cheat_readonce[converted_key] = false;
 #endif
     }
     SET_MODS;
