@@ -23,7 +23,6 @@
 
 //Fluffy TODO: Make it possible to customize which controller is controlling which player. Maybe make it so that one controller is mapped to two nations, and they can press Start to switch betweeen them?
 //Fluffy TODO: We need to do something with the onslaught of footstep sounds. At the very least: prevent more than one footstep sound from being played per tick.
-//Fluffy TODO: Make it impossible to activate stooge mode as it's pointless when we have 4-player splitscreen
 //Fluffy TODO: If you start a game, pick up something, then get game over, and then restart, then I think inventory might be wonky
 
 #include <stdio.h>
@@ -1790,7 +1789,7 @@ void move_guards()
             // Alrighty, do we have our prisoner in sight then?
             if ( (guard(i).room == guy(p).room) && guard_close_by(i, guy(p).px, guy(p).p2y) )
             {
-                //Fluffy TODO (should we skip this entirely? I'm not sure if the stooge system makes sense in multiplayer at all)
+                //Fluffy: Stooge system doesn't make sense in 4-player screen mode
                 /*
                 // Handle stooge
                 if (guy(p).state & STATE_STOOGING)

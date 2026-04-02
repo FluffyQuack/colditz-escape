@@ -901,9 +901,12 @@ void user_input()
             guybrush[i].animation.framecount = 0;
         }
 
+        //Fluffy: We're disabling stooge system as it makes no sense to have active when you can see all 4 nations at the same time
+        /*
         // Toggle stooge
         if (read_key_once(KEY_STOOGE, keyInputIdx))
             guybrush[i].state ^= STATE_STOOGING;
+        */
 
         // Even if we're idle, we might be trying to open a tunnel exit, or use a prop
         if (read_key_once(KEY_ACTION, keyInputIdx))
