@@ -21,14 +21,10 @@
  *  ---------------------------------------------------------------------------
  */
 
-//Fluffy TODO: Make it possible to swap controller mappings with F1-F4 for controller 1. Ie, press F2, and the controller 1 controls player 2
 //Fluffy TODO: Make it possible to customize which controller is controlling which player. Maybe make it so that one controller is mapped to two nations, and they can press Start to switch betweeen them?
-//Fluffy TODO: I think there is a bug where other players can't control their player anymore once a player is dead
-//             Could this be related to similar code as this:
-//               if (game_state & GAME_STATE_PAUSED) game_state ^= GAME_STATE_PAUSED|GAME_STATE_ACTION;
-//Fluffy TODO: Is there also a similar bug as the one above if one player escapes? Try turning off AI and have one player run out of the castle
-//Fluffy TODO: We need to do something with the onslaught of footsteps sounds. At the very least: prevent more than one footstep sound from being played per tick.
+//Fluffy TODO: We need to do something with the onslaught of footstep sounds. At the very least: prevent more than one footstep sound from being played per tick.
 //Fluffy TODO: Make it impossible to activate stooge mode as it's pointless when we have 4-player splitscreen
+//Fluffy TODO: If you start a game, pick up something, then get game over, and then restart, then I think inventory might be wonky
 
 #include <stdio.h>
 #include <stdlib.h>
