@@ -1127,6 +1127,9 @@ static void glut_idle_game(void)
 {
     uint8_t i;
 
+    //Fluffy: Reset sound ids played this frame
+    memset(soundPlayedThisTick, 0, sizeof(int) * NB_SFXS);
+
     // Reset the motion
     for(int i = 0; i < NB_NATIONS; i++)
     {

@@ -22,7 +22,7 @@
  */
 
 //Fluffy TODO: Make it possible to customize which controller is controlling which player. Maybe make it so that one controller is mapped to two nations, and they can press Start to switch betweeen them?
-//Fluffy TODO: We need to do something with the onslaught of footstep sounds. At the very least: prevent more than one footstep sound from being played per tick.
+//Fluffy TODO: Should we do more to reduce the onslaught of footstep sounds? We already made it so the game doesn't play the same sound twice during a frame.
 //Fluffy TODO: If you start a game, pick up something, then get game over, and then restart, then I think inventory might be wonky
 
 #include <stdio.h>
@@ -3059,11 +3059,19 @@ void set_sfxs()
 #endif
 }
 
+//Fluffy
+int soundPlayedThisTick[NB_SFXS] = {0, 0, 0, 0, 0};
+
 // Play one of the 5 game SFXs
 void play_sfx(int sfx_id)
 {
     if (opt_thrillerdance)
         return;
+
+    //Fluffy: Don't play the same sound twice during a tick
+    if(soundPlayedThisTick[sfx_id]) return;
+    soundPlayedThisTick[sfx_id] = 1;
+
 #if defined(PSP)
     play_sample(-1, sfx[sfx_id].volume, sfx[sfx_id].upconverted_address,
         sfx[sfx_id].upconverted_length, PLAYBACK_FREQ, 16, false);

@@ -130,6 +130,7 @@ static __inline void consume_prop(int nationIdx)
 extern uint8_t		nb_animations;
 extern s_animation	animations[MAX_ANIMATIONS];
 extern s_guybrush	guybrush[NB_GUYBRUSHES];
+extern int soundPlayedThisTick[NB_SFXS];
 
 
 /*
