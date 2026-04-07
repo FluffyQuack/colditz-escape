@@ -163,6 +163,15 @@ s_key_input key_input[KEYINPUT_NUM]; // Keyboard + 4 xinputs + glut joystick
 
 static	__inline bool read_key_once(uint8_t k, int keyInputIdx)
 {
+    if(keyInputIdx == -1) //-1 means we check any input device
+    {
+        for(int i = 0; i < KEYINPUT_NUM; i++)
+        {
+            if(read_key_once(k, i)) return true;
+        }
+        return false;
+    }
+
     if (key_input[keyInputIdx].key_down[k])
     {
         if (key_input[keyInputIdx].key_readonce[k])
@@ -183,6 +192,15 @@ static	__inline bool read_key_once(uint8_t k, int keyInputIdx)
 
 static __inline bool player_key_down(uint8_t k, int keyInputIdx)
 {
+    if(keyInputIdx == -1) //-1 means we check any input device
+    {
+        for(int i = 0; i < KEYINPUT_NUM; i++)
+        {
+            if(player_key_down(k, i)) return true;
+        }
+        return false;
+    }
+
     return key_input[keyInputIdx].key_down[k] ||
            (keyInputIdx == KEYINPUT_XINPUT1 && key_input[KEYINPUT_KEYBOARD].key_down[k]);
 }
