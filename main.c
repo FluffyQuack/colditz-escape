@@ -170,7 +170,21 @@ static	__inline bool read_key_once(uint8_t k, int keyInputIdx)
         key_input[keyInputIdx].key_readonce[k] = true;
         return true;
     }
+    // The player bound to XINPUT1 is also controlled by the keyboard
+    if (keyInputIdx == KEYINPUT_XINPUT1 && key_input[KEYINPUT_KEYBOARD].key_down[k])
+    {
+        if (key_input[KEYINPUT_KEYBOARD].key_readonce[k])
+            return false;
+        key_input[KEYINPUT_KEYBOARD].key_readonce[k] = true;
+        return true;
+    }
     return false;
+}
+
+static __inline bool player_key_down(uint8_t k, int keyInputIdx)
+{
+    return key_input[keyInputIdx].key_down[k] ||
+           (keyInputIdx == KEYINPUT_XINPUT1 && key_input[KEYINPUT_KEYBOARD].key_down[k]);
 }
 
 
@@ -994,7 +1008,7 @@ void user_input()
                  (read_key_once(KEY_INVENTORY_RIGHT, keyInputIdx)) )
             {
                 prop_id = selected_prop[i];
-                direction = key_input[KEYINPUT_KEYBOARD].key_down[KEY_INVENTORY_LEFT]?0x0F:1;
+                direction = player_key_down(KEY_INVENTORY_LEFT, keyInputIdx)?0x0F:1;
                 do
                     prop_id = (prop_id + direction) & 0x0F;
                 while ( (!props[i][prop_id]) && (prop_id != selected_prop[i]) );
@@ -1024,7 +1038,7 @@ void user_input()
                 guybrush[i].animation.end_of_ani_function = restore_params;
                 guybrush[i].animation.end_of_ani_parameter2 = 0;
 
-                if (key_input[keyInputIdx].key_down[KEY_INVENTORY_PICKUP])
+                if (player_key_down(KEY_INVENTORY_PICKUP, keyInputIdx))
                 {	// picking up
                     if (roomProps[i].over_prop)
                     {
@@ -1106,14 +1120,14 @@ void user_input()
         // Finally, we handle motion
         //
 
-        if (key_input[keyInputIdx].key_down[KEY_DIRECTION_LEFT])
+        if (player_key_down(KEY_DIRECTION_LEFT, keyInputIdx))
             plVelocity[i].dx = -1;
-        else if (key_input[keyInputIdx].key_down[KEY_DIRECTION_RIGHT])
+        else if (player_key_down(KEY_DIRECTION_RIGHT, keyInputIdx))
             plVelocity[i].dx = +1;
 
-        if (key_input[keyInputIdx].key_down[KEY_DIRECTION_UP])
+        if (player_key_down(KEY_DIRECTION_UP, keyInputIdx))
             plVelocity[i].d2y = -1;
-        else if (key_input[keyInputIdx].key_down[KEY_DIRECTION_DOWN])
+        else if (player_key_down(KEY_DIRECTION_DOWN, keyInputIdx))
             plVelocity[i].d2y = +1;
 
         //Fluffy TODO
