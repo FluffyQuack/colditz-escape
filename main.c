@@ -746,7 +746,7 @@ void user_input()
 #endif
 
     // Access the menu
-    if (read_key_once(KEY_ESCAPE, KEYINPUT_KEYBOARD))
+    if (read_key_once(KEY_ESCAPE, KEYINPUT_XINPUT1))
     {
         game_state |= GAME_STATE_MENU;
         selected_menu = MAIN_MENU;
@@ -758,7 +758,7 @@ void user_input()
     }
 
     // Handle the pausing of the game
-    if (read_key_once(KEY_PAUSE, KEYINPUT_KEYBOARD))
+    if (read_key_once(KEY_PAUSE, KEYINPUT_XINPUT1))
     {
         game_state |= GAME_STATE_PAUSED;
         picture_state = GAME_FADE_OUT_START;
