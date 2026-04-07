@@ -646,8 +646,6 @@ void restore_params(uint32_t param, uint32_t unused)
 //Fluffy
 static void AssignXinputControllerInput_Toggle(unsigned int keyInputIdx, unsigned int keyIdx, unsigned int button, unsigned int buttonMask, unsigned int lastButtonMask)
 {
-    if(keyIdx == KEY_ACTION && buttonMask & XINPUT_GAMEPAD_A)
-        keyIdx = keyIdx;
     if((buttonMask & button) && !(lastButtonMask & button))
     {
         key_input[keyInputIdx].key_down[keyIdx] = true;
