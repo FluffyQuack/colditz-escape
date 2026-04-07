@@ -1112,8 +1112,12 @@ void user_input()
                 guybrush[i].animation.end_of_ani_function = NULL;
             }
 
-            if (read_key_once(KEY_STOOGE, keyInputIdx))
-                play_sfx(0);
+            //Fluffy: Stooge button makes a sound?!? Anyway, it's disabled for four-player view
+            if(fourSplitscreen == 0)
+            {
+                if (read_key_once(KEY_STOOGE, keyInputIdx))
+                    play_sfx(0);
+            }
         }
 
         //
