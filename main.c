@@ -671,15 +671,8 @@ static void AssignXinputControllerInput_Held(unsigned int keyInputIdx, unsigned 
 
 int playerControllers[4] = {KEYINPUT_XINPUT1, KEYINPUT_XINPUT2, KEYINPUT_XINPUT3, KEYINPUT_XINPUT4};
 
-// Act on user input (keys, joystick)
-void user_input()
+void ReadControllerInput()
 {
-    uint16_t prop_offset;
-    uint8_t  prop_id, direction, i, j;
-    int16_t  exit_nr;
-    uint8_t  cur_prop;
-
-    //Fluffy
     Xinput_Update(); //Read current controller states
     static unsigned int last_buttonMask[KEYINPUT_NUM] = {0,0,0,0,0,0};
     unsigned int controllerIdx = 0;
@@ -734,6 +727,18 @@ void user_input()
         }
         controllerIdx++;
     }
+}
+
+// Act on user input (keys, joystick)
+void user_input()
+{
+    uint16_t prop_offset;
+    uint8_t  prop_id, direction, i, j;
+    int16_t  exit_nr;
+    uint8_t  cur_prop;
+
+    //Fluffy
+    ReadControllerInput();
 
 #if !defined(PSP)
     // Hey, GLUT, where's my bleeping callback on Windows?
@@ -1351,28 +1356,29 @@ static void glut_idle_game(void)
 
 void process_menu()
 {
-    bool cancel_selected = read_key_once(KEY_CANCEL, KEYINPUT_KEYBOARD);
+    bool cancel_selected = read_key_once(KEY_CANCEL, KEYINPUT_XINPUT1);
     char save_name[] = "colditz_00.sav";
 #if !defined(PSP)
     static int old_w=2*PSP_SCR_WIDTH, old_h=2*PSP_SCR_HEIGHT;
 #endif
 
     // Menu navigation (up or down)
-    if (read_key_once(SPECIAL_KEY_UP, KEYINPUT_KEYBOARD) || read_key_once(KEY_DIRECTION_UP, KEYINPUT_KEYBOARD))
+    if (read_key_once(SPECIAL_KEY_UP, KEYINPUT_XINPUT1) || read_key_once(KEY_DIRECTION_UP, KEYINPUT_XINPUT1))
     {
         do
             selected_menu_item = (selected_menu_item+NB_MENU_ITEMS-1)%NB_MENU_ITEMS;
         while (!enabled_menus[selected_menu][selected_menu_item]);
     }
-    if (read_key_once(SPECIAL_KEY_DOWN, KEYINPUT_KEYBOARD) || read_key_once(KEY_DIRECTION_DOWN, KEYINPUT_KEYBOARD))
+    if (read_key_once(SPECIAL_KEY_DOWN, KEYINPUT_XINPUT1) || read_key_once(KEY_DIRECTION_DOWN, KEYINPUT_XINPUT1))
     {
         do
             selected_menu_item = (selected_menu_item+1)%NB_MENU_ITEMS;
         while (!enabled_menus[selected_menu][selected_menu_item]);
     }
 
-    if (read_key_once(KEY_ACTION, KEYINPUT_KEYBOARD) || read_key_once(0x0D, KEYINPUT_KEYBOARD) || read_key_once(' ', KEYINPUT_KEYBOARD) ||
-        read_key_once(SPECIAL_KEY_LEFT, KEYINPUT_KEYBOARD) || read_key_once(SPECIAL_KEY_RIGHT, KEYINPUT_KEYBOARD) || cancel_selected)
+    bool action_selected = read_key_once(KEY_ACTION, KEYINPUT_XINPUT1) || read_key_once(0x0D, KEYINPUT_XINPUT1) || read_key_once(' ', KEYINPUT_XINPUT1) ||
+        read_key_once(SPECIAL_KEY_LEFT, KEYINPUT_XINPUT1) || read_key_once(SPECIAL_KEY_RIGHT, KEYINPUT_XINPUT1) || cancel_selected;
+    if (action_selected)
     {
         switch (selected_menu)
         {
@@ -1523,13 +1529,14 @@ static void glut_idle_static_pic(void)
     update_timers();
 
 #if !defined(PSP)
-    glutForceJoystickFunc();
+    //glutForceJoystickFunc();
 #endif
+    ReadControllerInput(); //Fluffy
 
     if (game_menu)
         process_menu();
 
-    if ((intro) && read_key_once(last_key_used, KEYINPUT_KEYBOARD))
+    if ((intro) && (read_key_once(last_key_used, KEYINPUT_KEYBOARD) || read_key_once(KEY_CANCEL, KEYINPUT_XINPUT1) || read_key_once(KEY_ACTION, KEYINPUT_XINPUT1)))
     {	// Exit intro => start new game
         mod_release();
         newgame_init();
@@ -1538,7 +1545,7 @@ static void glut_idle_static_pic(void)
         last_key_used = 0;
     }
     else if (game_over && (picture_state > GAME_FADE_OUT) && (picture_state < PICTURE_FADE_OUT_START)
-        && read_key_once(last_key_used, KEYINPUT_KEYBOARD))
+        && (read_key_once(last_key_used, KEYINPUT_KEYBOARD) || read_key_once(KEY_CANCEL, KEYINPUT_XINPUT1) || read_key_once(KEY_ACTION, KEYINPUT_XINPUT1)))
     {	// Exit game over/game won => Intro
         mod_release();
         picture_state = PICTURE_FADE_OUT_START;
@@ -1655,7 +1662,7 @@ static void glut_idle_static_pic(void)
                 picture_state = GAME_FADE_IN_START;
             }
         }
-        else if (read_key_once(last_key_used, KEYINPUT_KEYBOARD) ||
+        else if (read_key_once(last_key_used, KEYINPUT_KEYBOARD) || read_key_once(KEY_CANCEL, KEYINPUT_XINPUT1) || read_key_once(KEY_ACTION, KEYINPUT_XINPUT1) ||
             ( (!game_over) && (!paused) && (program_time-picture_t > PICTURE_TIMEOUT)))
         {	// Any key or timeout
             picture_state++;
@@ -1741,8 +1748,9 @@ void glut_idle_suspended(void)
 {
 
 #if !defined(PSP)
-    glutForceJoystickFunc();
+    //glutForceJoystickFunc();
 #endif
+    ReadControllerInput(); //Fluffy
 
     // If we didn't get out, wait for any key
     if ((!game_suspended) || read_key_once(last_key_used, KEYINPUT_KEYBOARD))
