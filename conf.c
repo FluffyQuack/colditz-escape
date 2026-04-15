@@ -138,6 +138,10 @@ bool set_conf_defaults(void)
     SET_KEY_DEFAULT(key_prisoner_french);
     SET_KEY_DEFAULT(key_prisoner_american);
     SET_KEY_DEFAULT(key_prisoner_polish);
+    iniparser_set(config, "controls:xinput_controller_1", "1");
+    iniparser_set(config, "controls:xinput_controller_2", "2");
+    iniparser_set(config, "controls:xinput_controller_3", "3");
+    iniparser_set(config, "controls:xinput_controller_4", "4");
 
     return true;
 }

@@ -159,6 +159,7 @@ typedef struct {
 #define KEYINPUT_XINPUT4 4
 #define KEYINPUT_GLUT 5
 #define KEYINPUT_NUM 6
+#define KEYINPUT_NONE 6  // player has no controller assigned
 s_key_input key_input[KEYINPUT_NUM]; // Keyboard + 4 xinputs + glut joystick
 
 static	__inline bool read_key_once(uint8_t k, int keyInputIdx)
@@ -171,6 +172,8 @@ static	__inline bool read_key_once(uint8_t k, int keyInputIdx)
         }
         return false;
     }
+
+    if(keyInputIdx >= KEYINPUT_NUM) return false;
 
     if (key_input[keyInputIdx].key_down[k])
     {
@@ -200,6 +203,8 @@ static __inline bool player_key_down(uint8_t k, int keyInputIdx)
         }
         return false;
     }
+
+    if(keyInputIdx >= KEYINPUT_NUM) return false;
 
     return key_input[keyInputIdx].key_down[k] ||
            (keyInputIdx == KEYINPUT_XINPUT1 && key_input[KEYINPUT_KEYBOARD].key_down[k]);
@@ -669,6 +674,56 @@ static void AssignXinputControllerInput_Held(unsigned int keyInputIdx, unsigned 
 
 int playerControllers[4] = {KEYINPUT_XINPUT1, KEYINPUT_XINPUT2, KEYINPUT_XINPUT3, KEYINPUT_XINPUT4};
 
+// Per-hardware-controller player cycling config (parsed from ini)
+static int ctrl_player_list[4][4];   // 0-based player indices for each controller
+static int ctrl_player_list_len[4];  // number of players in each controller's list
+static int ctrl_player_list_idx[4];  // current position in each controller's list
+
+static void parse_controller_mapping(int ctrl, int ini_value)
+{
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%d", ini_value);
+    int len = 0;
+    for(int i = 0; buf[i] != '\0' && len < 4; i++)
+    {
+        int digit = buf[i] - '0';
+        if(digit >= 1 && digit <= 4)
+            ctrl_player_list[ctrl][len++] = digit - 1; // store as 0-based
+    }
+    if(len == 0 && ini_value != 0)
+    {
+        ctrl_player_list[ctrl][0] = ctrl; // fallback: controller N controls player N
+        len = 1;
+    }
+    // ini_value == 0 means "no player assigned"; len stays 0
+    ctrl_player_list_len[ctrl] = len;
+    ctrl_player_list_idx[ctrl] = 0;
+}
+
+void init_controller_player_mappings(void)
+{
+    const char* keys[4] = {
+        "controls:xinput_controller_1",
+        "controls:xinput_controller_2",
+        "controls:xinput_controller_3",
+        "controls:xinput_controller_4"
+    };
+    int defaults[4] = {1, 2, 3, 4};
+
+    for(int ctrl = 0; ctrl < 4; ctrl++)
+        parse_controller_mapping(ctrl, iniparser_getint(config, keys[ctrl], defaults[ctrl]));
+
+    // Rebuild playerControllers from the first entry in each controller's list
+    for(int i = 0; i < 4; i++)
+        playerControllers[i] = KEYINPUT_NONE;
+    for(int ctrl = 0; ctrl < 4; ctrl++)
+    {
+        if(ctrl_player_list_len[ctrl] == 0) continue;
+        int player = ctrl_player_list[ctrl][0];
+        playerControllers[player] = KEYINPUT_XINPUT1 + ctrl;
+    }
+}
+
 void ReadControllerInput()
 {
     Xinput_Update(); //Read current controller states
@@ -704,6 +759,36 @@ void ReadControllerInput()
         
         if(buttonMask != last_buttonMask[i])
         {
+            // Check if LB/RB should cycle this controller's active player instead of
+            // propagating as KEY_PRISONER_LEFT/RIGHT (only when >1 player in the list)
+            bool lb_new = (buttonMask & XINPUT_GAMEPAD_LEFT_SHOULDER) && !(last_buttonMask[i] & XINPUT_GAMEPAD_LEFT_SHOULDER);
+            bool rb_new = (buttonMask & XINPUT_GAMEPAD_RIGHT_SHOULDER) && !(last_buttonMask[i] & XINPUT_GAMEPAD_RIGHT_SHOULDER);
+            bool lb_handled = false, rb_handled = false;
+
+            if(ctrl_player_list_len[controllerIdx] > 1)
+            {
+                if(rb_new)
+                {
+                    int old_player = ctrl_player_list[controllerIdx][ctrl_player_list_idx[controllerIdx]];
+                    if(playerControllers[old_player] == i)
+                        playerControllers[old_player] = KEYINPUT_NONE;
+                    ctrl_player_list_idx[controllerIdx] = (ctrl_player_list_idx[controllerIdx] + 1) % ctrl_player_list_len[controllerIdx];
+                    int new_player = ctrl_player_list[controllerIdx][ctrl_player_list_idx[controllerIdx]];
+                    playerControllers[new_player] = i;
+                    rb_handled = true;
+                }
+                if(lb_new)
+                {
+                    int old_player = ctrl_player_list[controllerIdx][ctrl_player_list_idx[controllerIdx]];
+                    if(playerControllers[old_player] == i)
+                        playerControllers[old_player] = KEYINPUT_NONE;
+                    ctrl_player_list_idx[controllerIdx] = (ctrl_player_list_idx[controllerIdx] + ctrl_player_list_len[controllerIdx] - 1) % ctrl_player_list_len[controllerIdx];
+                    int new_player = ctrl_player_list[controllerIdx][ctrl_player_list_idx[controllerIdx]];
+                    playerControllers[new_player] = i;
+                    lb_handled = true;
+                }
+            }
+
             AssignXinputControllerInput_Toggle(i, KEY_ACTION, XINPUT_GAMEPAD_A, buttonMask, last_buttonMask[i]);
             AssignXinputControllerInput_Toggle(i, KEY_CANCEL, XINPUT_GAMEPAD_B, buttonMask, last_buttonMask[i]);
             AssignXinputControllerInput_Toggle(i, KEY_SLEEP, XINPUT_GAMEPAD_X, buttonMask, last_buttonMask[i]);
@@ -713,8 +798,8 @@ void ReadControllerInput()
             AssignXinputControllerInput_Toggle(i, KEY_INVENTORY_RIGHT, XINPUT_GAMEPAD_DPAD_RIGHT, buttonMask, last_buttonMask[i]);
             AssignXinputControllerInput_Toggle(i, KEY_TOGGLE_WALK_RUN, XINPUT_GAMEPAD_RT, buttonMask, last_buttonMask[i]);
             AssignXinputControllerInput_Toggle(i, KEY_STOOGE, XINPUT_GAMEPAD_LT, buttonMask, last_buttonMask[i]);
-            AssignXinputControllerInput_Toggle(i, KEY_PRISONER_LEFT, XINPUT_GAMEPAD_LEFT_SHOULDER, buttonMask, last_buttonMask[i]);
-            AssignXinputControllerInput_Toggle(i, KEY_PRISONER_RIGHT, XINPUT_GAMEPAD_RIGHT_SHOULDER, buttonMask, last_buttonMask[i]);
+            if(!lb_handled) AssignXinputControllerInput_Toggle(i, KEY_PRISONER_LEFT, XINPUT_GAMEPAD_LEFT_SHOULDER, buttonMask, last_buttonMask[i]);
+            if(!rb_handled) AssignXinputControllerInput_Toggle(i, KEY_PRISONER_RIGHT, XINPUT_GAMEPAD_RIGHT_SHOULDER, buttonMask, last_buttonMask[i]);
             AssignXinputControllerInput_Toggle(i, KEY_ESCAPE, XINPUT_GAMEPAD_START, buttonMask, last_buttonMask[i]);
             AssignXinputControllerInput_Toggle(i, KEY_PAUSE, XINPUT_GAMEPAD_BACK, buttonMask, last_buttonMask[i]);
             AssignXinputControllerInput_Held(i, KEY_DIRECTION_UP, XINPUT_GAMEPAD_LEFTSTICK_UP, buttonMask);
@@ -2071,6 +2156,7 @@ int main (int argc, char *argv[])
 #endif
 
     // Now that we have our config set, we can initialize some controls values
+    init_controller_player_mappings();
     key_nation[0] = KEY_PRISONER_BRITISH;
     key_nation[1] = KEY_PRISONER_FRENCH;
     key_nation[2] = KEY_PRISONER_AMERICAN;
